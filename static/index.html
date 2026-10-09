@@ -69,7 +69,12 @@ textarea,input,select{min-width:0;max-width:100%}
 .award-place{width:min(29%,220px);opacity:0;transform:translateY(90px);transition:opacity .65s,transform .75s cubic-bezier(.2,.9,.2,1)}.award-place.revealed{opacity:1;transform:translateY(0)}.award-name{font-size:clamp(12px,1.6vw,19px);font-weight:850;min-height:49px;overflow-wrap:anywhere}.award-votes{font-size:12px;color:#d5ecdb;margin:3px 0 9px}.award-step{border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;font-size:clamp(32px,5vw,65px);font-weight:900;text-shadow:0 2px 12px #0002}.award-step.third{height:90px;background:linear-gradient(#c8926b,#87563b)}.award-step.second{height:130px;background:linear-gradient(#bacbcc,#6b8987)}.award-step.first{height:178px;background:linear-gradient(#f8db82,#bc8e30)}
 .firework{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4}.spark{position:absolute;width:6px;height:6px;border-radius:50%;background:var(--spark-color);left:var(--x);top:var(--y);animation:burst 1.5s ease-out forwards;box-shadow:0 0 8px var(--spark-color)}@keyframes burst{0%{transform:translate(0,0) scale(.5);opacity:1}75%{opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.15);opacity:0}}@media(max-width:760px){.award-layout{grid-template-columns:1fr}.answer-question{padding:11px}.award-stage{min-height:370px;padding:20px 9px}.award-podium{height:260px;gap:7px}.award-name{font-size:12px}.award-step.third{height:82px}.award-step.second{height:118px}.award-step.first{height:158px}}
 @media(prefers-reduced-motion:reduce){.award-place,.spark{animation:none;transition:none}}
-</style><link rel="stylesheet" href="/design.css?v=20261009-stage2"></head><body>
+</style><link rel="stylesheet" href="/design.css?v=20261009-stage2"><style>
+.guided-control{background:linear-gradient(135deg,#f3faf5,#fff);border:1px solid #bcdac5;border-radius:18px;padding:18px;margin-bottom:20px}
+.guided-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}.guided-top strong{font-variant-numeric:tabular-nums;color:#1d6540;font-size:14px}
+.guided-prev-next{margin-top:12px}.guided-action-row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}.guided-action-row button{font-size:13px;min-height:49px;white-space:normal;line-height:1.3}
+@media(max-width:620px){.guided-action-row{grid-template-columns:1fr}.guided-control{padding:13px}.guided-action-row button{min-height:44px}}
+</style></head><body>
 <header class="app-header"><div class="brand" aria-label="P&I Strategy"><div class="brand-icon">P&I</div><div class="brand-name"><strong>P&I <span>Strategy</span></strong><small>JUZ40 · WORKSPACE</small></div></div><div class="row"><span id="status" class="pill" role="status" aria-live="polite">Қосылуда...</span><button id="logout" class="hidden">Шығу</button></div></header>
 <div id="sharedTimerBar" class="shared-timer-bar hidden" role="timer" aria-label="Ортақ таймер">
   <div class="shared-timer-inner"><span class="shared-timer-dot" aria-hidden="true"></span><span id="sharedStageBlock" class="shared-stage-block">Блок 1</span><span id="sharedStageStatus" class="shared-stage-status">Басталмаған</span><strong id="sharedStageClock" class="shared-stage-clock">15:00</strong></div>
@@ -125,7 +130,7 @@ return card('Менің тобым',welcome+steps+groupList+(p.captain?'<div cla
 if(VIEW==='result')return card('Менің тобымның қорытындысы',`<p class="muted">Тек өз тобыңыздың жауаптары.</p>${blocks.map((b,i)=>`<h3>${i+1}. ${b}</h3>${Object.entries(S.shared).filter(([k])=>k.startsWith(g+'|'+i+'|')).map(([k,v])=>`<div class="issue"><small>${esc(k.split('|')[2])}</small><p class="pre">${esc(v)}</p></div>`).join('')||'<p class="muted">Жауап жоқ</p>'}`).join('')}<a href="/api/team/${MODE}/${[...new Set(S.staff.map(x=>x.group))].indexOf(g)}/pdf?actor=${ME}" target="_blank"><button class="primary">Өз тобымның PDF файлын жүктеу</button></a>`);
 if(VIEW==='awards')return awardParticipantPage();let b=Number(VIEW.replace('block',''));let isClosed=S.closed[b]||S.session_closed;let hasHistorical=Object.keys(S.shared||{}).some(k=>k.startsWith(g+'|'+b+'|'))||(b===0&&issuesFor(g).length>0);let neverOpened=!S.opened[b]&&!isClosed&&!hasHistorical;if(neverOpened)return card(blocks[b],question('Бұл блок әлі ашылмаған. Сақталған жауап жоқ.'));let completed=!!S.finished[g+'|'+b];let content=`<p class="muted">${isClosed?'Блок жабық · бұрын сақталған жауаптар тек оқу режимінде көрсетіледі.':completed?'Бұл блок капитан тарапынан бекітілген. Тек әкімші қайта аша алады.':p.captain?'Топпен талқылап, ортақ жауаптарды енгізіңіз.':'Капитанның ортақ жауабын көре аласыз.'}</p>`;
 if(b===0){let phase=S.phase;content+=`<div class="blockbar">${[['writing','1. Мәселе жазу'],['voting','2. Дауыс'],['final','3. ТОП-3 шешім']].map(([v,l])=>`<span class="pill" style="opacity:${v===phase?1:.42}">${l}</span>`).join('')}</div>`;
-if(phase==='writing'&&!isClosed){let own=issuesFor(g).filter(x=>x.author===ME);content+=`<h3>Менің ойымша, біздің бөлімдегі мәселелер:</h3>${own.map((x,i)=>`<div class="field"><label>${i+1}-мәселе</label><textarea data-issue-edit="${x.id}">${esc(x.text)}</textarea><button data-save-issue="${x.id}">Өзгерісті сақтау</button></div>`).join('')}${own.length<3?'<textarea id="newIssue" placeholder="Бөлімдегі мәселені сипаттаңыз..."></textarea><button class="primary" id="addIssue">+ Мәселені қосу</button>':''}<h3>Топ мүшелерінің ұсыныстары</h3>${issuesFor(g).map(x=>`<div class="issue"><small>${esc(personName(x.author))}</small><p>${esc(x.text)}</p></div>`).join('')}`}
+if(phase==='writing'&&!isClosed&&!S.issues_locked){let own=issuesFor(g).filter(x=>x.author===ME);content+=`<h3>Менің ойымша, біздің бөлімдегі мәселелер:</h3>${own.map((x,i)=>`<div class="field"><label>${i+1}-мәселе</label><textarea data-issue-edit="${x.id}">${esc(x.text)}</textarea><button data-save-issue="${x.id}">Өзгерісті сақтау</button></div>`).join('')}${own.length<3?'<textarea id="newIssue" placeholder="Бөлімдегі мәселені сипаттаңыз..."></textarea><button class="primary" id="addIssue">+ Мәселені қосу</button>':''}<h3>Топ мүшелерінің ұсыныстары</h3>${issuesFor(g).map(x=>`<div class="issue"><small>${esc(personName(x.author))}</small><p>${esc(x.text)}</p></div>`).join('')}`}
 if(phase==='voting'&&!isClosed){let ownvotes=S.votes[String(ME)]||[];content+=`<h3>Дәл 3 мәселені таңдаңыз</h3><p class="muted">Таңдалды: <span id="voteCount">${ownvotes.length}</span>/3. Кезең аяқталғанға дейін өзгертуге болады.</p>${issuesFor(g).map(x=>`<label class="issue row"><input style="width:auto" type="checkbox" data-vote="${x.id}" ${ownvotes.includes(x.id)?'checked':''}><span>${esc(x.text)}</span></label>`).join('')}<button class="primary" id="saveVotes">3 дауысты сақтау</button>`}
 if(phase==='final'||isClosed||hasHistorical){let order=scores(g);let chosen=order.slice(0,3);let tie=order.length>3&&order[2]?.count===order[3]?.count;content+=`<h3>Дауыс беру рейтингі</h3>${order.map((x,i)=>`<div class="issue"><b>${i+1}. ${esc(x.text)}</b><p class="muted">${x.count} дауыс</p></div>`).join('')}${tie?'<div class="warn">Үшінші орын бойынша тең дауыс бар. Капитан топпен ақылдасып таңдауы керек.</div>':''}`;if(tie&&canWrite(0))content+=`<label>Үшінші мәселенің ID нөмірін енгізіңіз</label><input id="tieChoice" value="${esc(S.shared[g+'|0|choice_2']||'')}"><button data-save-tie>Таңдауды сақтау</button>`;for(let i=0;i<3;i++)content+=sharedField(0,'solution_'+i,'№'+(i+1)+' мәселенің шешімі'+(chosen[i]?' — '+chosen[i].text:''));}
 }else if(b===1){content+=question('Бөлім мен компанияның 1, 3 және 5 жылдан кейінгі болашағын бөлек талқылаңыз.');for(let prefix of ['department','company']){content+=`<section class="vision-group"><h4>${prefix==='department'?'01 / БӨЛІМНІҢ БОЛАШАҒЫ':'02 / JUZ40 КОМПАНИЯСЫНЫҢ БОЛАШАҒЫ'}</h4>`;for(let y of [1,3,5])content+=sharedField(1,prefix+'_'+y,y+' жылдан кейін');content+='</section>'}if(p.dept==='Әдістеме'){content+='<section class="vision-group"><h4>03 / JUZ40 БАСПАСЫ</h4>'+sharedField(1,'publisher','JUZ40 Баспасының болашағы (жылдарға бөлмей)')+'</section>'}}
@@ -153,6 +158,17 @@ const STAGE_PLAN=[
  {id:'risks',title:'ҰБТ өзгерістері мен тәуекелдер',group:'4-блок',block:3},
  {id:'awards',title:'Ең белсенділерге дауыс беру',group:'Марапаттау',block:null}
 ];
+const SHOW_CUES=[
+ {id:'welcome',label:'Ашылу',group:'Кіріспе'},
+ {id:'agenda',label:'Бағдарлама',group:'Кіріспе'},
+ ...STAGE_PLAN.flatMap(st=>[
+  {id:st.id+':instruction',label:st.title+' · Нұсқаулық',group:st.group},
+  {id:st.id+':work',label:st.title+' · Жұмыс / таймер',group:st.group},
+  {id:st.id+':recap',label:st.title+' · Нәтижелер',group:st.group}]),
+ {id:'closing',label:'Қорытынды',group:'Финал'}
+];
+function cueIndex(st){let k=SHOW_CUES.findIndex(v=>v.id===st?.cue);return k<0?0:k}
+function cueStatus(st){let idx=cueIndex(st),c=SHOW_CUES[idx];return {idx,c,total:SHOW_CUES.length,stage:c.id.split(':')[0],part:c.id.split(':')[1]||''}}
 function stageTimeLeft(st){if(!st)return 600000;return st.running?Math.max(0,Number(st.deadline_ms||0)-(Date.now()+STAGE_CLOCK_OFFSET)):Math.max(0,Number(st.remaining_ms||0))}
 function formatStageTime(ms){let seconds=Math.ceil(ms/1000);return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`}
 function stageStatus(st){if(!st)return 'Күтілуде';if(st.running)return stageTimeLeft(st)>0?'Жүріп жатыр':'Уақыт аяқталды';return stageTimeLeft(st)<Number(st.duration_ms)?'Пауза':'Басталмаған'}
@@ -191,6 +207,7 @@ function stagePreviewBody(st){
   case 'instruction':return head(esc(entry.title),'Қатысушыларға тапсырма нұсқаулығы','КЕЗЕҢ НҰСҚАУЛЫҒЫ')+'<div class="stage-preview-cover">Тапсырманы орындау тәртібі</div>';
   case 'work':return head(esc(entry.title),esc(entry.group),'ҚАЗІРГІ КЕЗЕҢ · WORK')+`<div id="stagePreviewTime" class="stage-preview-time">${formatStageTime(stageTimeLeft(st))}</div>`;
   case 'progress':return head('7 топтың прогресі','Ағымдағы орындалу статистикасы')+'<div class="stage-preview-cover">7 команда · LIVE PROGRESS</div>';
+  case 'recap':return head(esc(entry.title)+' · Нәтиже',focus,'КЕЗЕҢ ҚОРЫТЫНДЫСЫ')+'<div class="stage-preview-cover">7 топтың қорытындысы · Нәтижелер</div>';
   case 'results':return head('Топтың нәтижелері',focus)+'<div class="stage-preview-cover">Бекітілген стратегиялық жауаптар</div>';
   case 'vision':return head('Vision 2027–2029–2031',focus)+'<div class="stage-preview-cover">Бөлімнің · компанияның · Баспаның болашағы</div>';
   case 'awards':return head('Ең белсенді қатысушылар','Жалпы ТОП-3 марапаттау')+'<div class="stage-preview-cover">🥈 2 · 🥇 1 · 🥉 3</div>';
@@ -209,7 +226,15 @@ function liveStagePage(){
  let name=esc(current.title);
  return card('Live Stage · Презентация және таймер',`
  <div class="stage-control-layout"><div class="stage-console">
-  <div class="stage-section-heading"><span class="pill">LIVE STAGE · ПРЕЗЕНТАЦИЯ</span><span class="muted">Проекторға арналған 9 экран</span></div>
+  <div class="stage-section-heading"><span class="pill">LIVE STAGE · ПРЕЗЕНТАЦИЯ</span><span class="muted">Кезеңдік жүргізуші сценарийі · 24 қадам</span></div>
+  <div class="guided-control" aria-label="Стратегиялық сессия жүргізуші сценарийі">
+   <div class="guided-top"><span class="pill">24 ҚАДАМДЫҚ СЦЕНАРИЙ</span><strong>${cueStatus(st).idx+1} / ${SHOW_CUES.length}</strong></div>
+   <label for="guidedCueSelect">Келесі көрсетілімді таңдаңыз</label>
+   <select id="guidedCueSelect">${SHOW_CUES.map((cue,i)=>`<option value="${esc(cue.id)}" ${st.cue===cue.id?'selected':''}>${String(i+1).padStart(2,'0')} · ${esc(cue.group)} · ${esc(cue.label)}</option>`).join('')}</select>
+   <div class="stage-control-buttons guided-prev-next"><button id="guidedPrevious">← Алдыңғы қадам</button><button class="primary" id="guidedNext">Келесі қадам →</button></div>
+   <div class="guided-action-row"><button id="guidedStart" class="primary" ${!st.running&&(cueStatus(st).part==='instruction'||cueStatus(st).part==='work')?'':'disabled'}>▶ Жұмысты бастау + таймер</button><button id="guidedFinish" ${cueStatus(st).part==='work'||cueStatus(st).part==='recap'?'':'disabled'}>■ Жұмысты аяқтау → нәтижелер</button></div>
+   <p class="muted stage-disclaimer">«Келесі қадам» — тек презентацияны ауыстырады. «Жұмысты бастау» басылғанда ғана қатысушыларға кезең ашылады. «Жұмысты аяқтау» уақытты тоқтатады; капитандардың ресми жауаптарын автоматты түрде бекітпейді.</p>
+  </div>
   <div class="present-stage-panel"><label for="stageScreenSelect">Проектордағы презентация беті</label>
     <select id="stageScreenSelect">${STAGE_SCREENS.map(item=>`<option value="${item.id}" ${st.screen===item.id?'selected':''}>${esc(item.title)}</option>`).join('')}</select>
     <div class="stage-control-buttons"><button id="stagePrevSlide">← Алдыңғы бет</button><button id="stageNextSlide" class="primary">Келесі бет →</button></div>
@@ -238,6 +263,14 @@ function liveStagePage(){
 function bindLiveStage(){
  if(!ADMIN||VIEW!=='livestage')return;
  const send=(operation,data={})=>act('admin_live_stage',{operation,...data});
+ const jump=async id=>{let st=S.live_stage||{};if(st.running&&id.split(':')[0]!==st.stage_id){toast('⚠ Таймерді алдымен паузаға қойыңыз немесе жұмысты аяқтаңыз');return false}return send('set_cue',{cue:id})};
+ let guide=$('guidedCueSelect');if(guide)guide.onchange=async()=>{let prev=S.live_stage?.cue;if(!await jump(guide.value))guide.value=prev||'welcome'};
+ const moveCue=async delta=>{let index=cueIndex(S.live_stage),next=SHOW_CUES[Math.max(0,Math.min(SHOW_CUES.length-1,index+delta))];if(next)await jump(next.id)};
+ let gp=$('guidedPrevious');if(gp)gp.onclick=()=>moveCue(-1);
+ let gn=$('guidedNext');if(gn)gn.onclick=()=>moveCue(1);
+ let gs=$('guidedStart');if(gs)gs.onclick=()=>{let cue=S.live_stage?.cue||'',sid=cue.split(':')[0],part=cue.split(':')[1];if(!part||!confirm(`«${selectedStage(S.live_stage).title}» жұмыс кезеңін ашып, таймерді бастаймыз ба?`))return;send('guided_begin')};
+ let gf=$('guidedFinish');if(gf)gf.onclick=()=>{let sid=S.live_stage?.stage_id;let promptMsg=sid==='vote'?'Дауыс беру жабылады, ТОП-3 ашылады. Аяқтайсыз ба?':sid==='awards'?'Екі номинация бойынша дауыс беру жабылады. Аяқтайсыз ба?':'Жұмыс уақытын аяқтайсыз ба? Ресми жауаптарды бекіту бөлек орындалады.';if(confirm(promptMsg))send('guided_finish')};
+
  let screenSelect=$('stageScreenSelect');if(screenSelect)screenSelect.onchange=async()=>{const next=screenSelect.value,previous=S.live_stage?.screen||'work';stagePreviewSync(next);const ok=await send('set_screen',{screen:next});if(!ok)stagePreviewSync(previous)};
  const moveSlide=async step=>{let cur=STAGE_SCREENS.findIndex(x=>x.id===(S.live_stage?.screen||'work'));let next=STAGE_SCREENS[Math.max(0,Math.min(STAGE_SCREENS.length-1,cur+step))];if(next){stagePreviewSync(next.id);let ok=await send('set_screen',{screen:next.id});if(!ok)stagePreviewSync(S.live_stage?.screen||'work')}};
  let slidePrev=$('stagePrevSlide');if(slidePrev)slidePrev.onclick=()=>moveSlide(-1);
