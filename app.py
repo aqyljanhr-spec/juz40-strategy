@@ -256,27 +256,49 @@ def excel(mode:str,request:Request):
 @app.get('/api/team/{mode}/{group_no}/pdf')
 def pdf(mode:str,group_no:int,actor:int):
  if mode not in clients:raise HTTPException(400,'mode')
- s=load(mode);p=role(s,actor);g=p['group'];
+ s=load(mode);p=role(s,actor);g=p['group']
  if GROUPS.index(g)!=group_no:raise HTTPException(403,'Тек өз тобыңыз')
+ from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,KeepTogether,PageBreak
+ from reportlab.lib.styles import ParagraphStyle
+ from reportlab.lib import colors
+ from reportlab.lib.enums import TA_LEFT
+ from reportlab.lib.utils import simpleSplit
+ from xml.sax.saxutils import escape
  font='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
- if os.path.isfile(font):pdfmetrics.registerFont(TTFont('DejaVu',font))
- buf=io.BytesIO();c=canvas.Canvas(buf,pagesize=A4);c.setFont('DejaVu' if os.path.isfile(font) else 'Helvetica',11)
- y=790
- def line(t):
-  nonlocal y
-  for chunk in str(t).split('\n'):
-   while chunk:
-    part=chunk[:75];chunk=chunk[75:]
-    if y<65:c.showPage();c.setFont('DejaVu' if os.path.isfile(font) else 'Helvetica',11);y=790
-    c.drawString(35,y,part);y-=17
- c.setTitle('JUZ40 Strategy · '+g)
- line('JUZ40 STRATEGY · '+g)
- titles=['1. Қазіргі жағдай','2. Vision','3. Тиімділік','4. ҰБТ және тәуекелдер']
- for b,title in enumerate(titles):
-  y-=9;line(title)
-  for k,v in s['shared'].items():
-   if k.startswith(g+'|'+str(b)+'|'):line(k.split('|',2)[2]+': '+v)
- c.save();buf.seek(0)
+ boldfont='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+ if os.path.isfile(font):pdfmetrics.registerFont(TTFont('JuzBody',font))
+ if os.path.isfile(boldfont):pdfmetrics.registerFont(TTFont('JuzBold',boldfont))
+ f='JuzBody' if os.path.isfile(font) else 'Helvetica';fb='JuzBold' if os.path.isfile(boldfont) else 'Helvetica-Bold'
+ ink=colors.HexColor('#173723');green=colors.HexColor('#149447');soft=colors.HexColor('#F0F8F2');muted=colors.HexColor('#617867')
+ buf=io.BytesIO();doc=SimpleDocTemplate(buf,pagesize=A4,rightMargin=40,leftMargin=40,topMargin=49,bottomMargin=48,title='JUZ40 Strategy · '+g)
+ title=ParagraphStyle('JTitle',fontName=fb,fontSize=24,leading=31,textColor=ink,spaceAfter=14)
+ heading=ParagraphStyle('JHeading',fontName=fb,fontSize=15,leading=21,textColor=ink,spaceBefore=19,spaceAfter=10)
+ sub=ParagraphStyle('JSub',fontName=fb,fontSize=11,leading=17,textColor=ink,spaceAfter=6)
+ body=ParagraphStyle('JBody',fontName=f,fontSize=10,leading=16,textColor=ink,spaceAfter=8,wordWrap='CJK')
+ small=ParagraphStyle('JSmall',fontName=f,fontSize=9,leading=14,textColor=muted)
+ def P(v,style=body):return Paragraph(escape(str(v or '—')).replace('\n','<br/>'),style)
+ def panel(label,value):
+  data=[[P(label,sub)],[P(value,body)]]
+  t=Table(data,colWidths=[A4[0]-80],hAlign='LEFT');t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),soft),('BOX',(0,0),(-1,-1),0.6,colors.HexColor('#D5E8D9')),('TOPPADDING',(0,0),(-1,0),12),('BOTTOMPADDING',(0,-1),(-1,-1),13),('LEFTPADDING',(0,0),(-1,-1),13),('RIGHTPADDING',(0,0),(-1,-1),13)]));return t
+ story=[Spacer(1,26),P('JUZ40 STRATEGY',ParagraphStyle('Brand',parent=sub,fontSize=17,textColor=green)),Spacer(1,18),P('Стратегиялық сессия қорытындысы',title),P(g,heading),P('PRODUCT & IT  •  Әдістеме / Сапа / IT',small),Spacer(1,25),panel('Топтың стратегиялық есебі','Төрт блок бойынша сақталған жауаптар және негізгі қорытындылар'),Spacer(1,24),P('TEST — сынақ нәтижелері' if mode=='test' else 'LIVE — стратегиялық сессия',small),PageBreak()]
+ titles=['1. Қазіргі жағдай: ТОП-3 мәселе','2. Vision · 1 / 3 / 5 жыл','3. Қосу / Өзгерту / Алып тастау','4. ҰБТ өзгерістері және тәуекелдер']
+ labels={'department_1':'Бөлім — 1 жыл','department_3':'Бөлім — 3 жыл','department_5':'Бөлім — 5 жыл','company_1':'JUZ40 компаниясы — 1 жыл','company_3':'JUZ40 компаниясы — 3 жыл','company_5':'JUZ40 компаниясы — 5 жыл','publisher':'JUZ40 Баспасының болашағы','answer':'Топтың ортақ ұсынысы'}
+ for b,t in enumerate(titles):
+  story.append(P(t,heading))
+  if b==0:
+   issues=[dict(x) for x in s['issues'] if x['group']==g]
+   for x in issues:x['count']=sum(x['id'] in vote for vote in s['votes'].values())
+   issues.sort(key=lambda x:(-x['count'],x['id']))
+   if not issues:story.append(P('Әзірге мәселелер жоқ',small))
+   for i,x in enumerate(issues[:3]):story.append(panel('№'+str(i+1)+' · '+str(x['count'])+' дауыс · '+x['text'],s['shared'].get(g+'|0|solution_'+str(i),'Шешім енгізілмеген')));story.append(Spacer(1,8))
+  else:
+   entries=[(k.split('|',2)[2],v) for k,v in s['shared'].items() if k.startswith(g+'|'+str(b)+'|')]
+   if not entries:story.append(P('Әзірге жауап енгізілмеген',small))
+   for key,val in entries:story.append(panel(labels.get(key,key),val));story.append(Spacer(1,9))
+  story.append(Spacer(1,14))
+ def decorate(canvas,doc):
+  canvas.saveState();w,h=A4;canvas.setStrokeColor(colors.HexColor('#DDE9E0'));canvas.line(40,35,w-40,35);canvas.setFont(f,8);canvas.setFillColor(muted);canvas.drawString(40,24,'JUZ40 STRATEGY  •  '+('TEST' if mode=='test' else 'LIVE'));canvas.drawRightString(w-40,24,str(doc.page));canvas.restoreState()
+ doc.build(story,onFirstPage=decorate,onLaterPages=decorate);buf.seek(0)
  return StreamingResponse(buf,media_type='application/pdf',headers={'Content-Disposition':f'attachment; filename="juz40-group-{group_no+1}.pdf"'})
 
 class AIRequest(BaseModel):
