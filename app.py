@@ -104,7 +104,14 @@ def role(s,actor):
 def check_action(s,p,action):
  if action.startswith('admin_'): return # Authentication is enforced by the API route
  if s['session_closed'] and action not in ['report_save']:raise HTTPException(409,'Сессия жабық')
- if action not in ['join','report_save'] and (not s['opened'][{'issue_add':0,'issue_edit':0,'vote':0,'shared':int(action.split(':')[1]) if ':' in action else 0,'finish':int(action.split(':')[1]) if ':' in action else 0}.get(action,0)]):raise HTTPException(409,'Блок жабық')
+ if action in ('issue_add','issue_edit','vote'):
+  block=0
+ elif action.startswith(('shared:','finish:')):
+  block=int(action.split(':',1)[1])
+ else:
+  block=None
+ if block is not None and (block<0 or block>=4 or not s['opened'][block] or s['closed'][block]):
+  raise HTTPException(409,'Бұл блок жабық немесе әлі ашылмаған')
 
 def mutate(s,p,action,d):
  uid=p['id'];group=p['group'];phase=s['phase']
