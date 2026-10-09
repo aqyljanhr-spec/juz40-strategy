@@ -77,8 +77,113 @@ class Action(BaseModel):
     data:dict={}
 
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
+STAGE_PRESETS = {
+ 'issues': {'title':'Жеке мәселелерді жазу','minutes':10,'block':0,'task':'Бөлімдегі негізгі мәселелерді жеке жазыңыз.'},
+ 'vote': {'title':'Мәселелерге дауыс беру','minutes':5,'block':0,'task':'Өз тобыңыздағы ең маңызды үш мәселені таңдаңыз.'},
+ 'solutions': {'title':'ТОП-3 шешімдерді әзірлеу','minutes':15,'block':0,'task':'Үш басым мәселенің нақты шешімін бірге дайындаңыз.'},
+ 'vision': {'title':'Vision · 1 / 3 / 5 жыл','minutes':20,'block':1,'task':'Бөлім мен JUZ40-тың болашағын талқылаңыз.'},
+ 'changes': {'title':'Қосу / Өзгерту / Алып тастау','minutes':15,'block':2,'task':'Қандай жұмысты жеңілдетіп, автоматтандыруға болатынын анықтаңыз.'},
+ 'risks': {'title':'ҰБТ өзгерістері мен тәуекелдер','minutes':15,'block':3,'task':'ҰБТ өзгерістері мен алдын алу жоспарын талқылаңыз.'},
+ 'awards': {'title':'Ең белсенділерге дауыс беру','minutes':5,'block':None,'task':'Жалпы номинацияға басқа топтан, топтыққа өз тобыңыздан кандидат таңдаңыз.'},
+}
+STAGE_KEYS=list(STAGE_PRESETS)
+
+def default_live_stage():
+ duration=STAGE_PRESETS['issues']['minutes']*60000
+ return {'screen':'work','stage_id':'issues','block':0,'presets':{key:val['minutes'] for key,val in STAGE_PRESETS.items()},
+         'duration_ms':duration,'remaining_ms':duration,'deadline_ms':None,'running':False}
+
+def normalize_live_stage(state):
+ stage=state.setdefault('live_stage',default_live_stage())
+ old_schema='stage_id' not in stage
+ old_block=stage.get('block',0)
+ defaults=default_live_stage()
+ for key,val in defaults.items():stage.setdefault(key,val)
+ # Upgrade existing LIVE/TEST sessions without changing a timer already in progress.
+ if old_schema or stage.get('stage_id') not in STAGE_PRESETS:
+  stage['stage_id']={0:'issues',1:'vision',2:'changes',3:'risks'}.get(old_block,'issues')
+ if not isinstance(stage.get('presets'),dict):stage['presets']=defaults['presets'].copy()
+ for key,val in defaults['presets'].items():
+  if not isinstance(stage['presets'].get(key),int) or not 1<=stage['presets'][key]<=240:
+   stage['presets'][key]=val
+ stage['block']=STAGE_PRESETS[stage['stage_id']]['block']
+ return stage
+
+def choose_stage(stage, stage_id):
+ if stage_id not in STAGE_PRESETS:raise HTTPException(400,'Белгісіз кезең')
+ if stage.get('running'):raise HTTPException(409,'Алдымен таймерді паузаға қойыңыз')
+ stage['stage_id']=stage_id
+ stage['block']=STAGE_PRESETS[stage_id]['block']
+ duration=stage['presets'][stage_id]*60000
+ stage['duration_ms']=duration
+ stage['remaining_ms']=duration
+ stage['deadline_ms']=None
+ stage['running']=False
+
+def apply_stage_command(state, payload):
+ stage=normalize_live_stage(state)
+ op=str(payload.get('operation',''))
+ current_ms=int(time.time()*1000)
+ def remaining():
+  return max(0,int(stage['deadline_ms'])-current_ms) if stage['running'] and stage['deadline_ms'] is not None else max(0,int(stage['remaining_ms']))
+ if op=='select_stage':
+  choose_stage(stage,str(payload.get('stage_id','')))
+ elif op=='set_presets':
+  proposed=payload.get('presets')
+  if not isinstance(proposed,dict) or set(proposed)!=set(STAGE_KEYS):raise HTTPException(400,'Барлық кезеңнің уақыты көрсетілуі тиіс')
+  for key,value in proposed.items():
+   if isinstance(value,bool) or not isinstance(value,int) or not 1<=value<=240:
+    raise HTTPException(400,'Әр кезең 1–240 минут болуы тиіс')
+  stage['presets']=proposed.copy()
+  if not stage['running']:
+   duration=proposed[stage['stage_id']]*60000
+   stage['duration_ms']=duration
+   stage['remaining_ms']=duration
+   stage['deadline_ms']=None
+ elif op=='set_duration':
+  try:minutes=int(payload.get('minutes',0))
+  except (ValueError,TypeError):raise HTTPException(400,'Уақыт дұрыс емес')
+  if not 1<=minutes<=240:raise HTTPException(400,'1–240 минут аралығы')
+  if stage['running']:raise HTTPException(409,'Алдымен таймерді паузаға қойыңыз')
+  stage['presets'][stage['stage_id']]=minutes
+  stage['duration_ms']=stage['remaining_ms']=minutes*60000
+  stage['deadline_ms']=None
+ elif op in ('start','resume'):
+  if stage['running']:return
+  rest=remaining()
+  if op=='start' and rest<=0:rest=int(stage['duration_ms'])
+  if rest<=0:raise HTTPException(409,'Таймер біткен. Қайта орнатыңыз')
+  stage['remaining_ms']=rest
+  stage['deadline_ms']=current_ms+rest
+  stage['running']=True
+ elif op=='pause':
+  if not stage['running']:return
+  stage['remaining_ms']=remaining()
+  stage['deadline_ms']=None
+  stage['running']=False
+ elif op=='reset':
+  stage['running']=False
+  stage['duration_ms']=stage['presets'][stage['stage_id']]*60000
+  stage['remaining_ms']=int(stage['duration_ms'])
+  stage['deadline_ms']=None
+ elif op=='add':
+  try:minutes=int(payload.get('minutes',0))
+  except (ValueError,TypeError):raise HTTPException(400,'Уақыт дұрыс емес')
+  if minutes not in (1,5):raise HTTPException(400,'Тек 1 немесе 5 минут қосуға болады')
+  if stage['running']:
+   stage['deadline_ms']=max(current_ms,int(stage['deadline_ms']))+minutes*60000
+   stage['remaining_ms']=max(0,int(stage['deadline_ms'])-current_ms)
+  else:stage['remaining_ms']=min(4*3600000,remaining()+minutes*60000)
+  stage['duration_ms']=max(int(stage['duration_ms']),stage['remaining_ms'])
+ else:raise HTTPException(400,'Таймер командасы белгісіз')
+
+def prepare_stage_on_change(state, stage_id):
+ # Admin's actual stage changes prime the matching clock, never auto-start it.
+ stage=normalize_live_stage(state)
+ if not stage['running']:choose_stage(stage,stage_id)
+
 def default():
- return {'staff':[{**p,'captain':p['id']==DEFAULT_CAPTAINS[p['group']]} for p in STAFF], 'joined':[], 'drafts':{},'activity':{},'awards_open':False,'awards_closed':False,'award_votes':{'overall':{},'group':{}}, 'opened':[False]*4,'closed':[False]*4,'phase':'writing','issues':[],'votes':{},'shared':{},'finished':{},'session_closed':False,'reports':[],'audit':[],'revision':0}
+ return {'staff':[{**p,'captain':p['id']==DEFAULT_CAPTAINS[p['group']]} for p in STAFF], 'joined':[], 'live_stage':default_live_stage(), 'drafts':{},'activity':{},'awards_open':False,'awards_closed':False,'award_votes':{'overall':{},'group':{}}, 'opened':[False]*4,'closed':[False]*4,'phase':'writing','issues':[],'votes':{},'shared':{},'finished':{},'session_closed':False,'reports':[],'audit':[],'revision':0}
 _pg_pool=None
 _pg_lock=threading.Lock()
 def connection():
@@ -185,10 +290,12 @@ def mutate(s,p,action,d):
   s['finished'][group+'|'+str(b)]=True
  elif action=='admin_awards':
   op=d.get('operation')
-  if op=='open':s['awards_open']=True;s['awards_closed']=False
+  if op=='open':s['awards_open']=True;s['awards_closed']=False;prepare_stage_on_change(s,'awards')
   elif op=='close':s['awards_open']=False;s['awards_closed']=True
   elif op=='reopen':s['awards_open']=True;s['awards_closed']=False
   else:raise HTTPException(400,'Қате мәртебе')
+ elif action=='admin_live_stage':
+  apply_stage_command(s,d)
  elif action=='admin_rename':
   target=role(s,int(d.get('id',0)));name=' '.join(str(d.get('name','')).split())
   if not 3<=len(name)<=140:raise HTTPException(400,'Аты-жөні 3–140 таңба болуы тиіс')
@@ -198,8 +305,10 @@ def mutate(s,p,action,d):
   phase2=d.get('phase');
   if phase2 not in ['writing','voting','final']:raise HTTPException(400,'Қате кезең')
   s['phase']=phase2
+  prepare_stage_on_change(s,{'writing':'issues','voting':'vote','final':'solutions'}[phase2])
  elif action=='admin_block':
   b=int(d['block']);s['opened'][b]=bool(d['open']);s['closed'][b]=bool(d.get('close',False)) if not d['open'] else False
+  if d['open']:prepare_stage_on_change(s,{0:{'writing':'issues','voting':'vote','final':'solutions'}[s['phase']],1:'vision',2:'changes',3:'risks'}[b])
  elif action=='admin_reopen':
   b=int(d['block']);g=str(d['group']);s['finished'].pop(g+'|'+str(b),None);s['closed'][b]=False;s['opened'][b]=True
  elif action=='admin_assign':
@@ -235,6 +344,8 @@ def roster_public(mode:str):
 def get_state(mode:str, request:Request, actor:int=0, admin:bool=False):
  if mode not in clients:raise HTTPException(400,'mode')
  s=load(mode)
+ normalize_live_stage(s)
+ s['server_now_ms']=int(time.time()*1000)
  if admin:require_admin(request)
  if not actor and not admin:raise HTTPException(401,'Қатысушыны таңдаңыз')
  if actor and not admin:
@@ -259,6 +370,14 @@ class Heartbeat(BaseModel):
  mode:str='test'
  actor:int
  view:str='home'
+@app.get('/api/stage/{mode}')
+def get_stage_public(mode:str):
+ if mode not in clients:raise HTTPException(400,'mode')
+ stage=normalize_live_stage(load(mode))
+ sid=stage['stage_id']
+ return {'stage':stage,'title':STAGE_PRESETS[sid]['title'],'task':STAGE_PRESETS[sid]['task'],
+         'server_now_ms':int(time.time()*1000),'groups':len(GROUPS),'participants':len(STAFF)}
+
 @app.post('/api/heartbeat')
 def heartbeat(h:Heartbeat,request:Request):
  verify_origin(request)
