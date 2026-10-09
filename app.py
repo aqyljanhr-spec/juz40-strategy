@@ -36,6 +36,9 @@ def require_admin(request:Request):
   expiry,mac=token.split('.',1)
   if int(expiry)<time.time() or not hmac.compare_digest(hmac.new(ADMIN_SECRET.encode(),expiry.encode(),hashlib.sha256).hexdigest(),mac):raise ValueError()
  except (ValueError,TypeError):raise HTTPException(401,'Әкімші ретінде кіріңіз')
+def require_mode_access(mode:str, request:Request):
+ if mode=='test':require_admin(request)
+
 def verify_origin(request:Request):
  origin=request.headers.get('origin')
  if origin:
@@ -71,7 +74,7 @@ presence={'test':{},'live':{}}
 presence_lock=threading.Lock()
 
 class Action(BaseModel):
-    mode:str='test'
+    mode:str='live'
     actor:int=0
     action:str
     data:dict={}
@@ -418,14 +421,16 @@ def mutate(s,p,action,d):
  else:raise HTTPException(400,'Белгісіз әрекет')
 
 @app.get('/api/roster/{mode}')
-def roster_public(mode:str):
+def roster_public(mode:str,request:Request):
  if mode not in clients:raise HTTPException(400,'mode')
+ require_mode_access(mode,request)
  s=load(mode)
  return {'staff':[{'id':p['id'],'name':p['name'],'dept':p['dept'],'group':p['group'],'captain':p['captain']} for p in s['staff']]}
 
 @app.get('/api/state/{mode}')
 def get_state(mode:str, request:Request, actor:int=0, admin:bool=False):
  if mode not in clients:raise HTTPException(400,'mode')
+ require_mode_access(mode,request)
  s=load(mode)
  normalize_live_stage(s)
  s['server_now_ms']=int(time.time()*1000)
@@ -450,12 +455,13 @@ def get_state(mode:str, request:Request, actor:int=0, admin:bool=False):
  return s
 
 class Heartbeat(BaseModel):
- mode:str='test'
+ mode:str='live'
  actor:int
  view:str='home'
 @app.get('/api/stage/{mode}')
-def get_stage_public(mode:str):
+def get_stage_public(mode:str,request:Request):
  if mode not in clients:raise HTTPException(400,'mode')
+ require_mode_access(mode,request)
  stage=normalize_live_stage(load(mode))
  sid=stage['stage_id']
  return {'stage':stage,'title':STAGE_PRESETS[sid]['title'],'task':STAGE_PRESETS[sid]['task'],
@@ -542,6 +548,7 @@ def presentation_data(mode:str,request:Request):
 def heartbeat(h:Heartbeat,request:Request):
  verify_origin(request)
  if h.mode not in presence:raise HTTPException(400,'mode')
+ require_mode_access(h.mode,request)
  if h.actor==-1:require_admin(request)
  elif h.actor not in {p['id'] for p in STAFF}:raise HTTPException(403,'Қатысушы жоқ')
  with presence_lock:presence[h.mode][str(h.actor)]={'at':time.monotonic(),'view':h.view[:32]}
@@ -551,6 +558,7 @@ def heartbeat(h:Heartbeat,request:Request):
 async def post_action(payload:Action,request:Request):
  if payload.mode not in clients:raise HTTPException(400,'mode')
  verify_origin(request)
+ require_mode_access(payload.mode,request)
  admin_action=payload.action.startswith('admin_') or payload.action=='report_save'
  if admin_action:require_admin(request)
  with lock:
@@ -572,6 +580,10 @@ async def post_action(payload:Action,request:Request):
 @app.websocket('/api/live/{mode}')
 async def live(websocket:WebSocket,mode:str):
  if mode not in clients:await websocket.close(code=1008);return
+ if mode=='test':
+  try:require_admin(websocket)
+  except HTTPException:
+   await websocket.close(code=1008);return
  await websocket.accept();clients[mode].add(websocket)
  try:
   while True:await websocket.receive_text()
@@ -599,8 +611,9 @@ def excel(mode:str,request:Request):
  return StreamingResponse(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f'attachment; filename="juz40-{mode}.xlsx"'})
 
 @app.get('/api/team/{mode}/{group_no}/pdf')
-def pdf(mode:str,group_no:int,actor:int):
+def pdf(mode:str,group_no:int,actor:int,request:Request):
  if mode not in clients:raise HTTPException(400,'mode')
+ require_mode_access(mode,request)
  s=load(mode);p=role(s,actor);g=p['group']
  if GROUPS.index(g)!=group_no:raise HTTPException(403,'Тек өз тобыңыз')
  from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,KeepTogether,PageBreak
