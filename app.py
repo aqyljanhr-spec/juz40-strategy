@@ -1,6 +1,7 @@
 """JUZ40 Strategy — FastAPI/SQLite standalone event session server."""
 import os,json,sqlite3,threading,datetime,io,zipfile,urllib.request,hmac,hashlib,base64,time,secrets
 import psycopg
+from psycopg_pool import ConnectionPool
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,WebSocket,WebSocketDisconnect,Request
 from fastapi.responses import FileResponse,StreamingResponse,JSONResponse
@@ -76,14 +77,23 @@ class Action(BaseModel):
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def default():
  return {'staff':[{**p,'captain':p['id']==DEFAULT_CAPTAINS[p['group']]} for p in STAFF], 'joined':[], 'opened':[False]*4,'closed':[False]*4,'phase':'writing','issues':[],'votes':{},'shared':{},'finished':{},'session_closed':False,'reports':[],'audit':[],'revision':0}
+_pg_pool=None
+_pg_lock=threading.Lock()
 def connection():
- if DATABASE_URL:
-  c=psycopg.connect(DATABASE_URL)
+  global _pg_pool
+  if DATABASE_URL:
+   if _pg_pool is None:
+    with _pg_lock:
+     if _pg_pool is None:
+      pool=ConnectionPool(DATABASE_URL,min_size=1,max_size=5,timeout=12,open=True)
+      with pool.connection() as c:
+       c.execute('CREATE TABLE IF NOT EXISTS state (mode TEXT PRIMARY KEY,payload TEXT NOT NULL)')
+      _pg_pool=pool
+   return _pg_pool.connection()
+  DB.parent.mkdir(parents=True,exist_ok=True)
+  c=sqlite3.connect(str(DB),timeout=15)
   c.execute('CREATE TABLE IF NOT EXISTS state (mode TEXT PRIMARY KEY,payload TEXT NOT NULL)')
-  c.commit()
   return c
- DB.parent.mkdir(parents=True,exist_ok=True)
- c=sqlite3.connect(str(DB));c.execute('CREATE TABLE IF NOT EXISTS state (mode TEXT PRIMARY KEY,payload TEXT NOT NULL)');return c
 
 def load(mode):
  with connection() as c:
