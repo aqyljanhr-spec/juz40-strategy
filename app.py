@@ -294,10 +294,25 @@ def save(mode,s):
   if DATABASE_URL:c.execute('INSERT INTO state(mode,payload) VALUES(%s,%s) ON CONFLICT(mode) DO UPDATE SET payload=excluded.payload',(mode,json.dumps(s,ensure_ascii=False)))
   else:c.execute('INSERT INTO state(mode,payload) VALUES(?,?) ON CONFLICT(mode) DO UPDATE SET payload=excluded.payload',(mode,json.dumps(s,ensure_ascii=False)))
 
+def active_staff(s):
+ return [p for p in s['staff'] if p.get('active',True)]
+
+def active_ids(s):
+ return {p['id'] for p in active_staff(s)}
+
 def role(s,actor):
  p=next((p for p in s['staff'] if p['id']==actor),None)
- if not p: raise HTTPException(403,'Қызметкер тізімде жоқ')
+ if not p:raise HTTPException(403,'Қызметкер тізімде жоқ')
+ if not p.get('active',True):raise HTTPException(403,'Қатысу құқығы өшірілген. Ұйымдастырушыға хабарласыңыз.')
  return p
+
+# Historical ballots remain in storage for audit, but excluded from active counts.
+def current_votes(s,category=None):
+ ids=active_ids(s)
+ if category is None:return {k:v for k,v in s['votes'].items() if int(k) in ids}
+ return {k:v for k,v in s.get('award_votes',{}).get(category,{}).items()
+         if int(k) in ids and v in ids}
+
 
 def check_action(s,p,action):
  if action.startswith('admin_'): return # Authentication is enforced by the API route
@@ -379,6 +394,16 @@ def mutate(s,p,action,d):
   else:raise HTTPException(400,'Қате мәртебе')
  elif action=='admin_live_stage':
   apply_stage_command(s,d)
+ elif action=='admin_participant':
+  try:target_id=int(d.get('id',0))
+  except (TypeError,ValueError):raise HTTPException(400,'Қатысушы ID дұрыс емес')
+  target=next((x for x in s['staff'] if x['id']==target_id),None)
+  if target is None:raise HTTPException(404,'Қатысушы табылмады')
+  enabled=d.get('enabled')
+  if not isinstance(enabled,bool):raise HTTPException(400,'Қатысу статусы дұрыс емес')
+  if not enabled and target.get('captain'):
+   raise HTTPException(409,'Алдымен осы топқа басқа капитан тағайындаңыз')
+  target['active']=enabled
  elif action=='admin_rename':
   target=role(s,int(d.get('id',0)));name=' '.join(str(d.get('name','')).split())
   if not 3<=len(name)<=140:raise HTTPException(400,'Аты-жөні 3–140 таңба болуы тиіс')
@@ -425,7 +450,7 @@ def roster_public(mode:str,request:Request):
  if mode not in clients:raise HTTPException(400,'mode')
  require_mode_access(mode,request)
  s=load(mode)
- return {'staff':[{'id':p['id'],'name':p['name'],'dept':p['dept'],'group':p['group'],'captain':p['captain']} for p in s['staff']]}
+ return {'staff':[{'id':p['id'],'name':p['name'],'dept':p['dept'],'group':p['group'],'captain':p['captain']} for p in active_staff(s)]}
 
 @app.get('/api/state/{mode}')
 def get_state(mode:str, request:Request, actor:int=0, admin:bool=False):
@@ -438,20 +463,20 @@ def get_state(mode:str, request:Request, actor:int=0, admin:bool=False):
  if not actor and not admin:raise HTTPException(401,'Қатысушыны таңдаңыз')
  if actor and not admin:
   p=role(s,actor);g=p['group'];s['issues']=[i for i in s['issues'] if i['group']==g]
-  s['votes']={k:v for k,v in s['votes'].items() if any(int(k)==x['id'] and x['group']==g for x in s['staff'])} if s['phase']=='final' else {str(actor):s['votes'].get(str(actor),[])}
+  s['votes']={k:v for k,v in current_votes(s).items() if any(int(k)==x['id'] and x['group']==g for x in active_staff(s))} if s['phase']=='final' else {str(actor):s['votes'].get(str(actor),[])}
   s['shared']={k:v for k,v in s['shared'].items() if k.startswith(g+'|')}
   s['reports']=[];s['audit']=[]
-  s['drafts']={k:v for k,v in s.get('drafts',{}).items() if k.startswith(str(actor)+'|') or (p.get('captain') and any(k.startswith(str(member['id'])+'|') for member in s['staff'] if member['group']==g))}
+  s['drafts']={k:v for k,v in s.get('drafts',{}).items() if k.startswith(str(actor)+'|') or (p.get('captain') and any(k.startswith(str(member['id'])+'|') for member in active_staff(s) if member['group']==g))}
   s['activity']={}
   votes=s.get('award_votes',{'overall':{},'group':{}})
   s['award_votes']={category:({str(actor):votes.get(category,{}).get(str(actor))} if not s.get('awards_closed') else {}) for category in ('overall','group')}
   if not s.get('awards_closed'):s.pop('award_results',None)
  if admin:
   with presence_lock:
-   s['online_ids']=[int(i) for i,t in presence[mode].items() if time.monotonic()-t['at']<75]
-   s['active_views']={str(i):v['view'] for i,v in presence[mode].items() if time.monotonic()-v['at']<75}
+   s['online_ids']=[int(i) for i,t in presence[mode].items() if time.monotonic()-t['at']<75 and int(i) in active_ids(s)]
+   s['active_views']={str(i):v['view'] for i,v in presence[mode].items() if time.monotonic()-v['at']<75 and int(i) in active_ids(s)}
  if admin and s.get('awards_closed'):
-  s['award_results']={category:{str(p['id']):sum(1 for target in s.get('award_votes',{}).get(category,{}).values() if target==p['id']) for p in s['staff']} for category in ('overall','group')}
+  s['award_results']={category:{str(p['id']):sum(1 for target in current_votes(s,category).values() if target==p['id']) for p in active_staff(s)} for category in ('overall','group')}
  return s
 
 class Heartbeat(BaseModel):
@@ -462,10 +487,10 @@ class Heartbeat(BaseModel):
 def get_stage_public(mode:str,request:Request):
  if mode not in clients:raise HTTPException(400,'mode')
  require_mode_access(mode,request)
- stage=normalize_live_stage(load(mode))
+ s=load(mode);stage=normalize_live_stage(s)
  sid=stage['stage_id']
  return {'stage':stage,'title':STAGE_PRESETS[sid]['title'],'task':STAGE_PRESETS[sid]['task'],
-         'server_now_ms':int(time.time()*1000),'groups':len(GROUPS),'participants':len(STAFF)}
+         'server_now_ms':int(time.time()*1000),'groups':len(GROUPS),'participants':len(active_staff(s))}
 
 @app.get('/api/presentation/{mode}')
 def presentation_data(mode:str,request:Request):
@@ -477,22 +502,22 @@ def presentation_data(mode:str,request:Request):
  online=set()
  with presence_lock:
   online={int(uid) for uid,obj in presence[mode].items() if time.monotonic()-obj['at']<75}
- members={group:[p for p in s['staff'] if p['group']==group] for group in GROUPS}
+ members={group:[p for p in active_staff(s) if p['group']==group] for group in GROUPS}
  groups=[]
  for group,people in members.items():
   ids={p['id'] for p in people}
   issue_authors={x['author'] for x in s['issues'] if x['group']==group}
-  voters={int(uid) for uid in s['votes'] if int(uid) in ids}
+  voters={int(uid) for uid in current_votes(s) if int(uid) in ids}
   done=sum(bool(s['finished'].get(group+'|'+str(i))) for i in range(4))
   groups.append({'name':group,'total':len(people),'joined':len(ids.intersection(s['joined'])),
-   'online':len(ids.intersection(online)),'issues':len(issue_authors),'issue_count':sum(x['group']==group for x in s['issues']),
+   'online':len(ids.intersection(online)),'issues':len(issue_authors),'issue_count':sum(x['group']==group and x['author'] in ids for x in s['issues']),
    'voted':len(voters),'done':done,'finished_block':{str(i):bool(s['finished'].get(group+'|'+str(i))) for i in range(4)}})
  ready=bool(s['finished'].get(g+'|'+str(b)) or s['closed'][b] or s['session_closed'])
  if b==0 and s['phase']!='final' and not s['closed'][0] and not s['session_closed']:ready=False
  results=[]
  if ready and b==0:
   issues=[dict(x) for x in s['issues'] if x['group']==g]
-  for x in issues:x['votes']=sum(x['id'] in vals for vals in s['votes'].values())
+  for x in issues:x['votes']=sum(x['id'] in vals for vals in current_votes(s).values())
   issues.sort(key=lambda x:(-x['votes'],x['id']))
   top_issues=issues[:3]
   if len(issues)>3 and issues[2]['votes']==issues[3]['votes']:
@@ -514,7 +539,7 @@ def presentation_data(mode:str,request:Request):
   vote_top=[]
   for issue in s['issues']:
    if issue['group']==g:
-    vote_top.append({'text':issue['text'],'votes':sum(issue['id'] in selections for selections in s['votes'].values()),'id':issue['id']})
+    vote_top.append({'text':issue['text'],'votes':sum(issue['id'] in selections for selections in current_votes(s).values()),'id':issue['id']})
   vote_top.sort(key=lambda x:(-x['votes'],x['id']))
   if len(vote_top)>3 and vote_top[2]['votes']==vote_top[3]['votes']:
    selected_id=s['shared'].get(g+'|0|choice_2','')
@@ -524,13 +549,13 @@ def presentation_data(mode:str,request:Request):
   else:vote_top=vote_top[:3]
  awards=None
  if s.get('awards_closed'):
-  totals={p['id']:0 for p in s['staff']}
-  for uid in s.get('award_votes',{}).get('overall',{}).values():
+  totals={p['id']:0 for p in active_staff(s)}
+  for uid in current_votes(s,'overall').values():
    if uid in totals:totals[uid]+=1
-  top=sorted((p for p in s['staff'] if totals[p['id']]>0),key=lambda p:(-totals[p['id']],p['name']))[:3]
+  top=sorted((p for p in active_staff(s) if totals[p['id']]>0),key=lambda p:(-totals[p['id']],p['name']))[:3]
   top=[{'name':p['name'],'group':p['group'],'votes':totals[p['id']]} for p in top]
   group_awards=[]
-  votes=s.get('award_votes',{}).get('group',{})
+  votes=current_votes(s,'group')
   for group,people in members.items():
    c={p['id']:0 for p in people}
    for uid in votes.values():
@@ -538,7 +563,7 @@ def presentation_data(mode:str,request:Request):
    winners=sorted((p for p in people if c[p['id']]>0),key=lambda p:(-c[p['id']],p['name']))
    group_awards.append({'group':group,'winner':winners[0]['name'] if winners else None,'votes':c[winners[0]['id']] if winners else 0})
   awards={'top':top,'groups':group_awards}
- return {'stage':stage,'groups':groups,'joined':len(s['joined']),'participants':len(s['staff']),
+ return {'stage':stage,'groups':groups,'joined':len(set(s['joined']) & active_ids(s)),'participants':len(active_staff(s)),
          'focus_group':g,'focus_block':b,'results_ready':ready,'results':results,'vision':vision,
          'vote_top':vote_top,'vote_tie_pending':vote_tie_pending,'issue_writing_complete':bool(s.get('issues_locked')),
          'awards':awards,'awards_open':bool(s.get('awards_open')),'awards_closed':bool(s.get('awards_closed')),
@@ -550,7 +575,7 @@ def heartbeat(h:Heartbeat,request:Request):
  if h.mode not in presence:raise HTTPException(400,'mode')
  require_mode_access(h.mode,request)
  if h.actor==-1:require_admin(request)
- elif h.actor not in {p['id'] for p in STAFF}:raise HTTPException(403,'Қатысушы жоқ')
+ else:role(load(h.mode),h.actor)
  with presence_lock:presence[h.mode][str(h.actor)]={'at':time.monotonic(),'view':h.view[:32]}
  return {'ok':True}
 
@@ -570,6 +595,8 @@ async def post_action(payload:Action,request:Request):
   s['audit'].append({'at':now(),'actor':p['name'],'action':payload.action,'data':{k:(v[:100] if isinstance(v,str) else v) for k,v in payload.data.items()}})
   s['audit']=s['audit'][-1000:]
   save(payload.mode,s)
+  if payload.action=='admin_participant' and payload.data.get('enabled') is False:
+   with presence_lock:presence[payload.mode].pop(str(payload.data.get('id')),None)
  dead=[]
  for ws in list(clients[payload.mode]):
   try:await ws.send_json({'revision':s['revision']})
@@ -594,10 +621,10 @@ async def live(websocket:WebSocket,mode:str):
 def excel(mode:str,request:Request):
  if mode not in clients:raise HTTPException(400,'mode')
  require_admin(request)
- s=load(mode);wb=Workbook();ws=wb.active;ws.title='Қатысушылар';ws.append(['Аты-жөні','Бөлім','Топ','Капитан','Check-in'])
- for p in s['staff']:ws.append([p['name'],p['dept'],p['group'],'Иә' if p['captain'] else 'Жоқ','Иә' if p['id'] in s['joined'] else 'Жоқ'])
+ s=load(mode);wb=Workbook();ws=wb.active;ws.title='Қатысушылар';ws.append(['Аты-жөні','Бөлім','Топ','Капитан','Check-in','Қатысу статусы'])
+ for p in s['staff']:ws.append([p['name'],p['dept'],p['group'],'Иә' if p['captain'] else 'Жоқ','Иә' if p['id'] in s['joined'] else 'Жоқ','Белсенді' if p.get('active',True) else 'Өшірілген'])
  w=wb.create_sheet('Мәселелер');w.append(['Топ','Қызметкер','Мәселе','Дауыс'])
- for x in s['issues']:w.append([x['group'],next((p['name'] for p in s['staff'] if p['id']==x['author']),''),x['text'],sum(x['id'] in votes for votes in s['votes'].values())])
+ for x in s['issues']:w.append([x['group'],next((p['name'] for p in s['staff'] if p['id']==x['author']),''),x['text'],sum(x['id'] in votes for votes in current_votes(s).values())])
  w=wb.create_sheet('Топ жауаптары');w.append(['Топ','Блок','Өріс','Жауап'])
  for k,v in s['shared'].items():
   g,b,f=k.split('|',2);w.append([g,int(b)+1,f,v])
@@ -645,7 +672,7 @@ def pdf(mode:str,group_no:int,actor:int,request:Request):
   story.append(P(t,heading))
   if b==0:
    issues=[dict(x) for x in s['issues'] if x['group']==g]
-   for x in issues:x['count']=sum(x['id'] in vote for vote in s['votes'].values())
+   for x in issues:x['count']=sum(x['id'] in vote for vote in current_votes(s).values())
    issues.sort(key=lambda x:(-x['count'],x['id']))
    if not issues:story.append(P('Әзірге мәселелер жоқ',small))
    for i,x in enumerate(issues[:3]):story.append(panel('№'+str(i+1)+' · '+str(x['count'])+' дауыс · '+x['text'],s['shared'].get(g+'|0|solution_'+str(i),'Шешім енгізілмеген')));story.append(Spacer(1,8))
