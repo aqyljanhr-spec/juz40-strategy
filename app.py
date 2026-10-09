@@ -1,11 +1,12 @@
 """JUZ40 Strategy — FastAPI/SQLite standalone event session server."""
-import os,json,sqlite3,threading,datetime,io,zipfile,urllib.request
+import os,json,sqlite3,threading,datetime,io,zipfile,urllib.request,hmac,hashlib,base64,time,secrets
 import psycopg
 from pathlib import Path
 from fastapi import FastAPI,HTTPException,WebSocket,WebSocketDisconnect,Request
-from fastapi.responses import FileResponse,StreamingResponse
+from fastapi.responses import FileResponse,StreamingResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from fastapi import Cookie
 from openpyxl import Workbook
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -19,6 +20,50 @@ DEFAULT_CAPTAINS={g:next(x['id'] for x in STAFF if x['group']==g) for g in GROUP
 DB=Path(os.environ.get('JUZ40_DB',str(ROOT/'strategy.sqlite3')))
 DATABASE_URL=os.environ.get('DATABASE_URL','')
 app=FastAPI(title='JUZ40 Strategy Platform')
+ADMIN_NAME='Дүйсенғалиұлы Ақылжан'
+ADMIN_PASSWORD=os.environ.get('SUPER_ADMIN_PASSWORD','')
+ADMIN_SECRET=os.environ.get('SUPER_ADMIN_SESSION_SECRET','')
+if not ADMIN_PASSWORD or len(ADMIN_PASSWORD)<12 or not ADMIN_SECRET or len(ADMIN_SECRET)<32:
+ raise RuntimeError('Set SUPER_ADMIN_PASSWORD (12+ chars) and SUPER_ADMIN_SESSION_SECRET (32+ chars) in Render Environment')
+def admin_cookie():
+ expiry=str(int(time.time())+8*3600)
+ digest=hmac.new(ADMIN_SECRET.encode(),expiry.encode(),hashlib.sha256).hexdigest()
+ return expiry+'.'+digest
+def require_admin(request:Request):
+ token=request.cookies.get('juz40_superadmin','')
+ try:
+  expiry,mac=token.split('.',1)
+  if int(expiry)<time.time() or not hmac.compare_digest(hmac.new(ADMIN_SECRET.encode(),expiry.encode(),hashlib.sha256).hexdigest(),mac):raise ValueError()
+ except (ValueError,TypeError):raise HTTPException(401,'Әкімші ретінде кіріңіз')
+def verify_origin(request:Request):
+ origin=request.headers.get('origin')
+ if origin:
+  from urllib.parse import urlsplit
+  expected=f'{request.url.scheme}://{request.headers.get("host", "")}'
+  # Render terminates HTTPS in a reverse proxy
+  forwarded=request.headers.get('x-forwarded-proto',request.url.scheme)
+  expected=f'{forwarded}://{request.headers.get("host", "")}'
+  if origin!=expected:raise HTTPException(403,'Қате Origin')
+class AdminCredentials(BaseModel):
+ password:str
+@app.post('/api/admin/login')
+def admin_login(credentials:AdminCredentials,request:Request):
+ verify_origin(request)
+ if not hmac.compare_digest(credentials.password,ADMIN_PASSWORD):raise HTTPException(401,'Құпиясөз дұрыс емес')
+ response=JSONResponse({'ok':True,'name':ADMIN_NAME})
+ response.set_cookie('juz40_superadmin',admin_cookie(),httponly=True,secure=True,samesite='strict',max_age=8*3600,path='/')
+ return response
+@app.get('/api/admin/me')
+def admin_me(request:Request):
+ require_admin(request)
+ return {'name':ADMIN_NAME,'role':'super_admin'}
+@app.post('/api/admin/logout')
+def admin_logout(request:Request):
+ verify_origin(request)
+ response=JSONResponse({'ok':True})
+ response.delete_cookie('juz40_superadmin',path='/')
+ return response
+
 lock=threading.RLock()
 clients={'test':set(),'live':set()}
 
@@ -57,7 +102,7 @@ def role(s,actor):
  return p
 
 def check_action(s,p,action):
- if action.startswith('admin_'): return # No identity proof: admin access is unprotected by chosen name-only access model
+ if action.startswith('admin_'): return # Authentication is enforced by the API route
  if s['session_closed'] and action not in ['report_save']:raise HTTPException(409,'Сессия жабық')
  if action not in ['join','report_save'] and (not s['opened'][{'issue_add':0,'issue_edit':0,'vote':0,'shared':int(action.split(':')[1]) if ':' in action else 0,'finish':int(action.split(':')[1]) if ':' in action else 0}.get(action,0)]):raise HTTPException(409,'Блок жабық')
 
@@ -130,11 +175,20 @@ def mutate(s,p,action,d):
   s['reports'].append({'version':len(s['reports'])+1,'text':text,'at':now(),'editor':uid})
  else:raise HTTPException(400,'Белгісіз әрекет')
 
-@app.get('/api/state/{mode}')
-def get_state(mode:str, actor:int=0, admin:bool=False):
+@app.get('/api/roster/{mode}')
+def roster_public(mode:str):
  if mode not in clients:raise HTTPException(400,'mode')
  s=load(mode)
- if admin:return s # Name-only admin access chosen by the user; not secure identity proof
+ return {'staff':[{'id':p['id'],'name':p['name'],'dept':p['dept'],'group':p['group'],'captain':p['captain']} for p in s['staff']]}
+
+@app.get('/api/state/{mode}')
+def get_state(mode:str, request:Request, actor:int=0, admin:bool=False):
+ if mode not in clients:raise HTTPException(400,'mode')
+ s=load(mode)
+ if admin:
+  require_admin(request)
+  return s
+ if not actor:raise HTTPException(401,'Қатысушыны таңдаңыз')
  if actor:
   p=role(s,actor);g=p['group'];s['issues']=[i for i in s['issues'] if i['group']==g]
   s['votes']={k:v for k,v in s['votes'].items() if any(int(k)==x['id'] and x['group']==g for x in s['staff'])} if s['phase']=='final' else {str(actor):s['votes'].get(str(actor),[])}
@@ -143,10 +197,13 @@ def get_state(mode:str, actor:int=0, admin:bool=False):
  return s
 
 @app.post('/api/action')
-async def post_action(payload:Action):
+async def post_action(payload:Action,request:Request):
  if payload.mode not in clients:raise HTTPException(400,'mode')
+ verify_origin(request)
+ admin_action=payload.action.startswith('admin_') or payload.action=='report_save'
+ if admin_action:require_admin(request)
  with lock:
-  s=load(payload.mode);p=role(s,payload.actor)
+  s=load(payload.mode);p={'id':0,'name':ADMIN_NAME,'group':'','dept':'Әкімшілік'} if admin_action else role(s,payload.actor)
   check_action(s,p,payload.action)
   mutate(s,p,payload.action,payload.data)
   s['revision']+=1
@@ -170,8 +227,9 @@ async def live(websocket:WebSocket,mode:str):
  finally:clients[mode].discard(websocket)
 
 @app.get('/api/export/{mode}.xlsx')
-def excel(mode:str):
+def excel(mode:str,request:Request):
  if mode not in clients:raise HTTPException(400,'mode')
+ require_admin(request)
  s=load(mode);wb=Workbook();ws=wb.active;ws.title='Қатысушылар';ws.append(['Аты-жөні','Бөлім','Топ','Капитан','Check-in'])
  for p in s['staff']:ws.append([p['name'],p['dept'],p['group'],'Иә' if p['captain'] else 'Жоқ','Иә' if p['id'] in s['joined'] else 'Жоқ'])
  w=wb.create_sheet('Мәселелер');w.append(['Топ','Қызметкер','Мәселе','Дауыс'])
@@ -220,9 +278,11 @@ class AIRequest(BaseModel):
  kind:str='strategic'
  actor:int=0
 @app.post('/api/ai')
-def ai(req:AIRequest):
+def ai(req:AIRequest,request:Request):
+ require_admin(request)
+ verify_origin(request)
  if not os.environ.get('OPENAI_API_KEY'):raise HTTPException(503,'AI API кілті орнатылмаған. OPENAI_API_KEY қажет.')
- s=load(req.mode);role(s,req.actor)
+ s=load(req.mode)
  group_names=GROUPS if req.scope=='all' else [g for g in GROUPS if g.startswith(req.scope+' ·')]
  answers={k:v for k,v in s['shared'].items() if any(k.startswith(g+'|') for g in group_names)}
  prompt='JUZ40 стратегиялық сессиясы. Қазақ тілінде '+req.kind+' талдау жасаңыз. Тек төмендегі бастапқы жауаптарға сүйеніңіз; қолдау таппаған тұжырымдарды гипотеза деп белгілеңіз; әр ұсыныстың дереккөз-тобын көрсетіңіз; нақты адам мен KPI ойдан қоспаңыз.\n'+json.dumps(answers,ensure_ascii=False)
