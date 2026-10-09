@@ -1,5 +1,51 @@
 <!doctype html><html lang="kk"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>JUZ40 Strategy Platform</title><style>
-:root{font-family:Inter,system-ui,-apple-system,sans-serif;color:#14251a;background:#f6faf7}*{box-sizing:border-box}body{margin:0}header{height:70px;background:#fff;border-bottom:1px solid #dce8df;display:flex;align-items:center;justify-content:space-between;padding:0 max(20px,calc((100vw - 1200px)/2))}.logo{font-size:22px;font-weight:900;letter-spacing:-.8px}.logo span{color:#179745}main{max-width:1200px;margin:auto;padding:24px 18px}.hero{background:#143c23;color:white;border-radius:22px;padding:27px 30px;margin-bottom:20px}.hero h1{margin:4px 0;font-size:clamp(23px,4vw,36px)}.hero p{color:#d4e7d8}.eyebrow{letter-spacing:1.6px;font-size:11px;font-weight:850;color:#80df9d}h2{font-size:23px;margin:0 0 10px}h3{font-size:17px;margin:8px 0}.muted,small{color:#718276}.card{background:white;border:1px solid #dce7de;border-radius:16px;padding:24px;margin-bottom:15px}.grid{display:grid;grid-template-columns:225px 1fr;gap:18px}.columns{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.mini{padding:14px;border:1px solid #e0e9e1;border-radius:12px}.value{font-size:27px;font-weight:850}.stack{display:grid;gap:9px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.between{justify-content:space-between}button{cursor:pointer;background:white;border:1px solid #cdded0;color:#183521;font:inherit;border-radius:10px;padding:10px 13px;font-weight:650}button:hover{border-color:#17a34a}button.primary{background:#159447;border-color:#159447;color:white}button.secondary{background:#eef8f0}button:disabled{opacity:.45;cursor:not-allowed}.nav{width:100%;text-align:left}.active{border-color:#16a34a;background:#eaf7ed;color:#126d34}input,select,textarea{width:100%;font:inherit;border:1px solid #cddbd0;border-radius:10px;padding:11px;background:#fff;color:#17291c}textarea{min-height:100px;resize:vertical}label{display:block;font-weight:720;font-size:13px;margin:12px 0 6px}.pill{background:#eaf7ed;color:#166d38;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:750}.line{height:1px;background:#e2eae3;margin:17px 0}.notice{border:1px solid #b8e4c6;background:#ecf9ef;color:#275c38;border-radius:12px;padding:13px;margin:12px 0}.warn{border:1px solid #e9d39b;background:#fffaed;color:#745822;border-radius:12px;padding:13px;margin:12px 0}.issue{border:1px solid #d9e4dc;border-radius:12px;padding:15px;margin:10px 0}.issue p{white-space:pre-wrap;margin:8px 0}.locked{background:#f5f7f5}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.score{font-weight:900;color:#168c45}.pre{white-space:pre-wrap;overflow-wrap:anywhere}.blockbar{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.field{margin:14px 0}.muted small{color:inherit}#toast{position:fixed;bottom:22px;right:22px;color:white;background:#153b25;padding:12px 17px;border-radius:10px;display:none;max-width:350px;z-index:2}.hidden{display:none!important}@media(max-width:760px){header{height:62px;padding:0 16px}.grid{grid-template-columns:1fr}.columns{grid-template-columns:1fr}.card{padding:17px}.hero{padding:21px}.navlist{display:flex;overflow:auto;gap:7px}.nav{white-space:nowrap;width:auto}main{padding:16px 12px}} </style></head><body>
+:root{font-family:Inter,system-ui,-apple-system,sans-serif;color:#14251a;background:#f6faf7}*{box-sizing:border-box}body{margin:0}header{height:70px;background:#fff;border-bottom:1px solid #dce8df;display:flex;align-items:center;justify-content:space-between;padding:0 max(20px,calc((100vw - 1200px)/2))}.logo{font-size:22px;font-weight:900;letter-spacing:-.8px}.logo span{color:#179745}main{max-width:1200px;margin:auto;padding:24px 18px}.hero{background:#143c23;color:white;border-radius:22px;padding:27px 30px;margin-bottom:20px}.hero h1{margin:4px 0;font-size:clamp(23px,4vw,36px)}.hero p{color:#d4e7d8}.eyebrow{letter-spacing:1.6px;font-size:11px;font-weight:850;color:#80df9d}h2{font-size:23px;margin:0 0 10px}h3{font-size:17px;margin:8px 0}.muted,small{color:#718276}.card{background:white;border:1px solid #dce7de;border-radius:16px;padding:24px;margin-bottom:15px}.grid{display:grid;grid-template-columns:225px 1fr;gap:18px}.columns{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.mini{padding:14px;border:1px solid #e0e9e1;border-radius:12px}.value{font-size:27px;font-weight:850}.stack{display:grid;gap:9px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.between{justify-content:space-between}button{cursor:pointer;background:white;border:1px solid #cdded0;color:#183521;font:inherit;border-radius:10px;padding:10px 13px;font-weight:650}button:hover{border-color:#17a34a}button.primary{background:#159447;border-color:#159447;color:white}button.secondary{background:#eef8f0}button:disabled{opacity:.45;cursor:not-allowed}.nav{width:100%;text-align:left}.active{border-color:#16a34a;background:#eaf7ed;color:#126d34}input,select,textarea{width:100%;font:inherit;border:1px solid #cddbd0;border-radius:10px;padding:11px;background:#fff;color:#17291c}textarea{min-height:100px;resize:vertical}label{display:block;font-weight:720;font-size:13px;margin:12px 0 6px}.pill{background:#eaf7ed;color:#166d38;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:750}.line{height:1px;background:#e2eae3;margin:17px 0}.notice{border:1px solid #b8e4c6;background:#ecf9ef;color:#275c38;border-radius:12px;padding:13px;margin:12px 0}.warn{border:1px solid #e9d39b;background:#fffaed;color:#745822;border-radius:12px;padding:13px;margin:12px 0}.issue{border:1px solid #d9e4dc;border-radius:12px;padding:15px;margin:10px 0}.issue p{white-space:pre-wrap;margin:8px 0}.locked{background:#f5f7f5}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.score{font-weight:900;color:#168c45}.pre{white-space:pre-wrap;overflow-wrap:anywhere}.blockbar{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.field{margin:14px 0}.muted small{color:inherit}#toast{position:fixed;bottom:22px;right:22px;color:white;background:#153b25;padding:12px 17px;border-radius:10px;display:none;max-width:350px;z-index:2}.hidden{display:none!important}@media(max-width:760px){header{height:62px;padding:0 16px}.grid{grid-template-columns:1fr}.columns{grid-template-columns:1fr}.card{padding:17px}.hero{padding:21px}.navlist{display:flex;overflow:auto;gap:7px}.nav{white-space:nowrap;width:auto}main{padding:16px 12px}}
+/* Mobile-first layout corrections. Prevent grid min-content from stretching the viewport. */
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+main,.grid,.card,.hero,aside,section,#content,.issue,.field{min-width:0;max-width:100%}
+.grid{grid-template-columns:225px minmax(0,1fr)}
+.columns{grid-template-columns:repeat(3,minmax(0,1fr))}
+pre,code,.pre,p,h1,h2,h3,h4,small,.notice,.warn,.issue{overflow-wrap:anywhere;word-break:normal}
+textarea,input,select{min-width:0;max-width:100%}
+@media(max-width:760px){
+  html,body{font-size:15px}
+  header{height:auto;min-height:60px;padding:9px 14px;gap:8px;flex-wrap:wrap}
+  .logo{font-size:19px;line-height:1.1;white-space:normal}
+  .logo small{font-size:12px}
+  header>.row{margin-left:auto;gap:6px;justify-content:flex-end;max-width:100%}
+  #status{font-size:11px;padding:5px 8px}
+  #logout{padding:7px 10px;font-size:12px}
+  main{width:100%;max-width:100%;padding:12px 12px 28px}
+  .hero{padding:16px 18px;border-radius:17px;margin-bottom:12px}
+  .hero p{margin:9px 0 0;line-height:1.5;font-size:13px}
+  .eyebrow{font-size:10px;letter-spacing:1px}
+  .grid{display:flex;flex-direction:column;gap:12px}
+  .grid>aside,.grid>section{display:block;width:100%;min-width:0;max-width:100%}
+  .grid>aside .card{margin:0;padding:14px}
+  #teamTag{display:inline-block;width:auto;max-width:100%}
+  #who{font-size:16px;line-height:1.35;margin:10px 0 5px;overflow-wrap:anywhere}
+  #roleLabel{margin:4px 0 12px;font-size:13px}
+  .navlist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;overflow:visible;width:100%}
+  .nav{width:100%;white-space:normal;text-align:left;line-height:1.3;min-width:0;font-size:12px;padding:10px 9px;min-height:42px;overflow-wrap:anywhere}
+  .card{padding:16px;margin-bottom:12px;border-radius:15px}
+  h2{font-size:20px;line-height:1.25}
+  h3{font-size:16px}
+  .columns{grid-template-columns:1fr}
+  .issue{padding:12px;margin:9px 0}
+  .blockbar{gap:7px}
+  .blockbar>*{min-width:0;max-width:100%}
+  .row{min-width:0}
+  .actions{gap:8px}
+  .actions button{max-width:100%;white-space:normal}
+  button{font-size:14px;line-height:1.35;padding:10px 12px;min-height:40px}
+  .notice,.warn{font-size:14px;line-height:1.5;padding:12px}
+  input,select,textarea{font-size:16px;line-height:1.45}
+  textarea{min-height:115px}
+  #content>.card>h2{margin-bottom:12px}
+  #toast{left:12px;right:12px;bottom:16px;max-width:none;font-size:13px}
+}
+@media(max-width:350px){.navlist{grid-template-columns:1fr}.hero{padding:15px}.card{padding:13px}}
+ </style></head><body>
 <header><div class="logo">JUZ<span>40</span> <small>STRATEGY</small></div><div class="row"><span id="status" class="pill">Қосылуда...</span><button id="logout" class="hidden">Шығу</button></div></header>
 <main><div class="hero"><div class="eyebrow">PRODUCT & IT · STRATEGY SESSION</div><p>Әдістеме · Сапа · IT | 76 қатысушы · 7 топ · 4 стратегиялық блок</p></div>
 <div id="login" class="card"><h2>Сессияға қосылу</h2><p class="muted">Қызметкерлер тізімінен өзіңізді таңдаңыз. Тобыңыз автоматты анықталады.</p><label>Жұмыс режимі</label><select id="mode"><option value="test">TEST — сынақ</option><option value="live">LIVE — нақты сессия</option></select><label>Аты-жөнін іздеу</label><input id="search" placeholder="Аты-жөніңізді жазыңыз..."><label>Қызметкер</label><select id="person"></select><div id="assigned" class="notice">Қызметкерді таңдаңыз.</div><button class="primary" id="join">Өз тобыма кіру →</button><div class="line"></div><button id="enterAdmin">Super Admin панеліне өту</button><div id="adminLogin" class="hidden" style="margin-top:14px"><label>Дүйсенғалиұлы Ақылжан · жеке құпиясөз</label><input id="adminPassword" type="password" autocomplete="current-password" placeholder="Құпиясөзді енгізіңіз"><div class="actions"><button class="primary" id="confirmAdmin">Кіру</button><button id="cancelAdmin">Болдырмау</button></div></div><div class="warn">Бұл жүйеде аты-жөнін таңдау ғана қолданылады. Сондықтан басқа адамның атынан кіруді технологиялық тұрғыдан болдырмау мүмкін емес. Құпия ақпаратты енгізбеңіз.</div></div>
