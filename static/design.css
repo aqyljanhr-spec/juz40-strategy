@@ -282,3 +282,10 @@ textarea::placeholder,input::placeholder{color:#a6b3aa}
 @media(max-width:760px){.shared-timer-bar{top:60px}.shared-timer-inner{min-height:46px;padding:6px 12px;gap:9px}.shared-stage-block{font-size:11px}.shared-stage-status{font-size:10px}.shared-stage-clock{font-size:20px}.stage-control-layout{margin-top:10px;gap:12px}.stage-console-time{font-size:65px}.stage-clock-label{font-size:9px}.stage-preview-green{min-height:190px}}
 @media(max-width:400px){.shared-stage-status{display:none}.shared-stage-clock{font-size:21px}.stage-control-buttons button{min-width:88px}.stage-preview-green{padding:18px}}
 @media(prefers-reduced-motion:reduce){.stage-progress-fill{transition:none}}
+
+/* Presenter slide selector and focus controls */
+.present-stage-panel{display:grid;gap:10px;background:#f4f9f5;border:1px solid #d9e7dc;border-radius:16px;padding:16px;margin-bottom:20px}
+.present-stage-panel label{margin:2px 0 0;color:#345341}
+.present-stage-panel select{background:#fff}
+.present-stage-panel .stage-control-buttons{margin:2px 0 0}
+.present-stage-panel .stage-disclaimer{margin:0 0 4px}

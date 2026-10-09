@@ -87,7 +87,7 @@ async function act(action,data={}){let btn=document.activeElement?.closest?.('bu
 function me(){return S?.staff.find(x=>x.id===ME)}function group(){return me()?.group}function groupStaff(){return S.staff.filter(x=>x.group===group())}function canWrite(b){return me()?.captain&&S.opened[b]&&!S.closed[b]&&!S.session_closed&&!S.finished[group()+'|'+b]}
 function scheduleRefresh(){if(refreshTimer)return;refreshTimer=setTimeout(()=>{refreshTimer=null;fetchState()},250)}function heartbeat(){if(!ME)return;fetch('/api/heartbeat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:MODE,actor:ME,view:VIEW}),credentials:'same-origin'}).catch(()=>{})}function live(){if(ws)ws.close();let protocol=location.protocol==='https:'?'wss:':'ws:';try{ws=new WebSocket(protocol+'//'+location.host+'/api/live/'+MODE);ws.onmessage=()=>scheduleRefresh();ws.onopen=()=>scheduleRefresh();ws.onclose=()=>{}}catch(e){}}
 function enter(person,admin=false){ME=admin?-1:Number(person);ADMIN=admin;VIEW=admin?'dashboard':'home';saveIdentity();$('login').classList.add('hidden');$('area').classList.remove('hidden');$('logout').classList.remove('hidden');render();live();heartbeat();if(!admin)act('join')}
-function saveIdentity(){try{let v=JSON.stringify({actor:ME,admin:ADMIN,mode:MODE,view:VIEW});localStorage.setItem('juz40-session',v);sessionStorage.setItem('juz40-session',v)}catch(e){}}function navItems(){return ADMIN?[['dashboard','Дашборд'],['livestage','Live Stage · Таймер'],['teams','Топтар'],['session','Кезеңдер'],['answers','Жауаптар'],['present','Көрсету режимі'],['awardadmin','Марапаттау · дауыс'],['awardpresent','Марапаттау · экран'],['individual','Жеке мәселелер'],['ai','AI аналитика'],['exports','Экспорт'],['history','Өзгерістер тарихы']]:[['home','Басты бет'],...blocks.map((b,i)=>['block'+i,(i+1)+'. '+b]),['awards','Белсендіге дауыс беру'],['result','Қорытынды / PDF']]}
+function saveIdentity(){try{let v=JSON.stringify({actor:ME,admin:ADMIN,mode:MODE,view:VIEW});localStorage.setItem('juz40-session',v);sessionStorage.setItem('juz40-session',v)}catch(e){}}function navItems(){return ADMIN?[['dashboard','Дашборд'],['livestage','Live Stage · Презентация'],['teams','Топтар'],['session','Кезеңдер'],['answers','Жауаптар'],['present','Көрсету режимі'],['awardadmin','Марапаттау · дауыс'],['awardpresent','Марапаттау · экран'],['individual','Жеке мәселелер'],['ai','AI аналитика'],['exports','Экспорт'],['history','Өзгерістер тарихы']]:[['home','Басты бет'],...blocks.map((b,i)=>['block'+i,(i+1)+'. '+b]),['awards','Белсендіге дауыс беру'],['result','Қорытынды / PDF']]}
 function navIcon(id){let paths={home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',result:'<path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4"/>',dashboard:'<rect x="3" y="3" width="7" height="8" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="15" width="7" height="6" rx="1"/>',teams:'<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6M17 15a5 5 0 0 1 4 5"/>',livestage:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 8v4l3 2M7 21h10"/>',session:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',answers:'<path d="M6 4h12v16H6zM9 9h6M9 13h6M9 17h4"/>',present:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4M7 21h10"/>',individual:'<path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/>',ai:'<path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/>',exports:'<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',history:'<path d="M3 12a9 9 0 1 0 3-6M3 3v6h6M12 7v6l4 2"/>',awardadmin:'<path d="M4 5h16v14H4zM8 9h8M8 13h5"/>',awardpresent:'<path d="M3 19h18M6 19v-5h4v5M10 19V6h4v13M14 19v-9h4v9"/>'};return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id]||'<circle cx="12" cy="12" r="8"/>'}</svg>`}
 function render(){
   if(!S||!ME)return;
@@ -171,13 +171,33 @@ function updateSharedStageClock(){
  let track=$('stageProgressFill');if(track)track.style.width=Math.max(0,Math.min(100,100*t/Math.max(1,Number(st.duration_ms))))+'%';
  let preview=$('stagePreviewTime');if(preview)preview.textContent=formatStageTime(t);
 }
+const STAGE_SCREENS=[
+ {id:'welcome',title:'01 · Ашылу'},
+ {id:'agenda',title:'02 · Бағдарлама'},
+ {id:'instruction',title:'03 · Кезең нұсқаулығы'},
+ {id:'work',title:'04 · Жұмыс және таймер'},
+ {id:'progress',title:'05 · 7 топтың прогресі'},
+ {id:'results',title:'06 · Топ нәтижелері'},
+ {id:'vision',title:'07 · Vision презентациясы'},
+ {id:'awards',title:'08 · Марапаттау'},
+ {id:'closing',title:'09 · Қорытынды'}
+];
 function liveStagePage(){
  let st=S.live_stage||{stage_id:'issues',presets:{issues:10},duration_ms:600000,remaining_ms:600000,running:false};
  let current=selectedStage(st),status=stageStatus(st);
  let name=esc(current.title);
- return card('Live Stage · Басқару пульті',`
+ return card('Live Stage · Презентация және таймер',`
  <div class="stage-control-layout"><div class="stage-console">
-  <div class="stage-section-heading"><span class="pill">ПРОЕКТОР · WORK</span><span class="muted">TEST және LIVE таймерлері бөлек</span></div>
+  <div class="stage-section-heading"><span class="pill">LIVE STAGE · ПРЕЗЕНТАЦИЯ</span><span class="muted">Проекторға арналған 9 экран</span></div>
+  <div class="present-stage-panel"><label for="stageScreenSelect">Проектордағы презентация беті</label>
+    <select id="stageScreenSelect">${STAGE_SCREENS.map(item=>`<option value="${item.id}" ${st.screen===item.id?'selected':''}>${esc(item.title)}</option>`).join('')}</select>
+    <div class="stage-control-buttons"><button id="stagePrevSlide">← Алдыңғы бет</button><button id="stageNextSlide" class="primary">Келесі бет →</button></div>
+    <p class="muted stage-disclaimer">Экран өзгергенде проектор автоматты жаңарады. Қатысушылардың жұмыс беті ауыспайды.</p>
+    <label for="stageFocusGroup">Нәтижелер көрсетілетін топ</label>
+    <select id="stageFocusGroup">${GROUPS().map(g=>`<option value="${esc(g)}" ${st.focus_group===g?'selected':''}>${esc(g)}</option>`).join('')}</select>
+    <label for="stageFocusBlock">Нәтижелер көрсетілетін блок</label>
+    <select id="stageFocusBlock">${blocks.map((v,i)=>`<option value="${i}" ${st.focus_block===i?'selected':''}>${i+1}. ${esc(v)}</option>`).join('')}</select>
+  </div>
   <label for="stageStepSelect">Сессия кезеңі</label>
   <select id="stageStepSelect" ${st.running?'disabled':''}>${STAGE_PLAN.map(item=>`<option value="${item.id}" ${current.id===item.id?'selected':''}>${esc(item.group)} · ${esc(item.title)}</option>`).join('')}</select>
   <p class="muted stage-disclaimer">Кезеңді ауыстырғанда оның жеке уақыты жүктеледі. Бастау батырмасын әкімші өзі басады.</p>
@@ -187,7 +207,7 @@ function liveStagePage(){
   <p class="muted stage-disclaimer">Таймер аяқталғанда ешбір блок автоматты жабылмайды.</p>
   <div class="stage-control-buttons"><button class="primary" id="stageProjector">↗ Проекторға шығару</button></div>
  </div>
- <div class="stage-live-preview"><span class="stage-preview-label">ПРОЕКТОР ЭКРАНЫ</span><div class="stage-preview-green"><span>P&I / LIVE STAGE</span><strong>${name}</strong><small>${esc(current.group)}</small><div id="stagePreviewTime" class="stage-preview-time">${formatStageTime(stageTimeLeft(st))}</div><span class="stage-preview-footer">7 топ · ${S.staff.length} қатысушы</span></div>
+ <div class="stage-live-preview"><span class="stage-preview-label">ПРОЕКТОР ЭКРАНЫ · <span id="stagePreviewScreen">${esc(STAGE_SCREENS.find(x=>x.id===(st.screen||'work'))?.title||'Жұмыс / таймер')}</span></span><div class="stage-preview-green"><span>P&I / LIVE STAGE</span><strong>${esc(STAGE_SCREENS.find(x=>x.id===(st.screen||'work'))?.title||'04 · Жұмыс және таймер')}</strong><small>${name} · ${esc(current.group)}</small><div id="stagePreviewTime" class="stage-preview-time">${formatStageTime(stageTimeLeft(st))}</div><span class="stage-preview-footer">7 топ · ${S.staff.length} қатысушы</span></div>
   <h3 class="stage-presets-title">Кезеңдердің уақыт жоспары</h3>
   <p class="muted stage-disclaimer">Уақыттарды өзгертіп, «Жоспарды сақтау» басыңыз. Жүріп жатқан таймер тоқтамайды.</p>
   <div class="stage-presets">${STAGE_PLAN.map(item=>`<label class="stage-preset-row"><span><b>${esc(item.title)}</b><small>${esc(item.group)}</small></span><span class="stage-preset-input"><input type="number" inputmode="numeric" min="1" max="240" step="1" value="${Number(st.presets?.[item.id]||10)}" data-stage-preset="${item.id}" aria-label="${esc(item.title)} ұзақтығы"><small>мин</small></span></label>`).join('')}</div>
@@ -197,6 +217,14 @@ function liveStagePage(){
 function bindLiveStage(){
  if(!ADMIN||VIEW!=='livestage')return;
  const send=(operation,data={})=>act('admin_live_stage',{operation,...data});
+ let screenSelect=$('stageScreenSelect');if(screenSelect)screenSelect.onchange=()=>send('set_screen',{screen:screenSelect.value});
+ const moveSlide=step=>{let cur=STAGE_SCREENS.findIndex(x=>x.id===(S.live_stage?.screen||'work'));let next=STAGE_SCREENS[Math.max(0,Math.min(STAGE_SCREENS.length-1,cur+step))];if(next)send('set_screen',{screen:next.id})};
+ let slidePrev=$('stagePrevSlide');if(slidePrev)slidePrev.onclick=()=>moveSlide(-1);
+ let slideNext=$('stageNextSlide');if(slideNext)slideNext.onclick=()=>moveSlide(1);
+ const focus=()=>send('set_focus',{group:$('stageFocusGroup').value,block:Number($('stageFocusBlock').value)});
+ let focusGroup=$('stageFocusGroup');if(focusGroup)focusGroup.onchange=focus;
+ let focusBlock=$('stageFocusBlock');if(focusBlock)focusBlock.onchange=focus;
+
  let stage=$('stageStepSelect');if(stage)stage.onchange=()=>send('select_stage',{stage_id:stage.value});
  let start=$('stageStart');if(start)start.onclick=()=>send(stageStatus(S.live_stage)==='Пауза'?'resume':'start');
  let pause=$('stagePause');if(pause)pause.onclick=()=>send('pause');
