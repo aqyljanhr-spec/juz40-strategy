@@ -87,12 +87,65 @@ STAGE_PRESETS = {
  'awards': {'title':'Ең белсенділерге дауыс беру','minutes':5,'block':None,'task':'Жалпы номинацияға басқа топтан, топтыққа өз тобыңыздан кандидат таңдаңыз.'},
 }
 STAGE_KEYS=list(STAGE_PRESETS)
-PRESENTATION_SCREENS=('welcome','agenda','instruction','work','progress','results','vision','awards','closing')
+PRESENTATION_SCREENS=('welcome','agenda','instruction','work','progress','results','vision','awards','closing','recap')
+# Presenter run of show. Slide navigation is separate from workflow permissions.
+GUIDED_STAGES=('issues','vote','solutions','vision','changes','risks','awards')
+GUIDED_CUES=tuple(['welcome','agenda']+[f'{sid}:{part}' for sid in GUIDED_STAGES for part in ('instruction','work','recap')]+['closing'])
+def cue_parts(cue):
+ if cue not in GUIDED_CUES:raise HTTPException(400,'Презентация қадамы дұрыс емес')
+ if ':' in cue:return cue.split(':',1)
+ return None,cue
+
+def stage_clock_pause(stage):
+ if stage.get('running'):
+  stage['remaining_ms']=max(0,int(stage.get('deadline_ms') or 0)-int(time.time()*1000))
+  stage['running']=False;stage['deadline_ms']=None
+
+def guided_cue(state,cue):
+ sid,screen=cue_parts(cue);stage=normalize_live_stage(state)
+ if sid and sid!=stage['stage_id']:choose_stage(stage,sid)
+ # Never silently stop the timer when moving to a new stage.
+ if stage['running'] and (sid!=stage['stage_id'] or screen=='instruction'):
+  raise HTTPException(409,'Келесі кезең алдында таймерді тоқтатыңыз')
+ stage['screen']=screen;stage['cue']=cue
+ if sid and STAGE_PRESETS[sid]['block'] is not None:stage['focus_block']=STAGE_PRESETS[sid]['block']
+ return stage
+
+def guided_begin(state):
+ stage=normalize_live_stage(state)
+ sid,screen=cue_parts(stage['cue'])
+ if not sid or screen not in ('instruction','work'):raise HTTPException(409,'Алдымен кезең нұсқаулығын таңдаңыз')
+ if stage['running']:raise HTTPException(409,'Таймер қазір жүріп жатыр')
+ b=STAGE_PRESETS[sid]['block']
+ if b is not None:
+  if state['session_closed']:raise HTTPException(409,'Сессия жабық. Алдымен қайта ашыңыз')
+  state['opened'][b]=True;state['closed'][b]=False
+ if sid=='issues':state['phase']='writing';state['issues_locked']=False
+ if sid=='vote':state['phase']='voting';state['vote_locked']=False
+ if sid=='solutions':state['phase']='final';state['vote_locked']=True
+ if sid=='awards':state['awards_open']=True;state['awards_closed']=False
+ rest=max(0,int(stage['remaining_ms']))
+ if rest<=0:rest=int(stage['presets'][sid])*60000
+ stage['remaining_ms']=rest;stage['deadline_ms']=int(time.time()*1000)+rest
+ stage['duration_ms']=max(int(stage['duration_ms']),rest)
+ stage['running']=True;stage['screen']='work';stage['cue']=f'{sid}:work'
+
+def guided_finish(state):
+ stage=normalize_live_stage(state)
+ sid,screen=cue_parts(stage['cue'])
+ if not sid or screen not in ('work','recap'):raise HTTPException(409,'Аяқталатын жұмыс кезеңін таңдаңыз')
+ stage_clock_pause(stage)
+ if sid=='issues':state['issues_locked']=True
+ if sid=='vote':state['vote_locked']=True;state['phase']='final'
+ if sid=='awards':state['awards_open']=False;state['awards_closed']=True
+ stage['screen']='recap';stage['cue']=f'{sid}:recap'
+
+
 
 
 def default_live_stage():
  duration=STAGE_PRESETS['issues']['minutes']*60000
- return {'screen':'work','stage_id':'issues','block':0,'presets':{key:val['minutes'] for key,val in STAGE_PRESETS.items()},
+ return {'screen':'welcome','cue':'welcome','stage_id':'issues','block':0,'presets':{key:val['minutes'] for key,val in STAGE_PRESETS.items()},
          'duration_ms':duration,'remaining_ms':duration,'deadline_ms':None,'running':False,'focus_group':GROUPS[0],'focus_block':0}
 
 def normalize_live_stage(state):
@@ -110,6 +163,9 @@ def normalize_live_stage(state):
    stage['presets'][key]=val
  stage['block']=STAGE_PRESETS[stage['stage_id']]['block']
  if stage.get('screen') not in PRESENTATION_SCREENS:stage['screen']='work'
+ if stage.get('cue') not in GUIDED_CUES and stage.get('cue')!='manual':
+  candidate=stage['stage_id']+':'+stage['screen']
+  stage['cue']=candidate if candidate in GUIDED_CUES else 'welcome'
  if stage.get('focus_group') not in GROUPS:stage['focus_group']=GROUPS[0]
  if not isinstance(stage.get('focus_block'),int) or stage['focus_block'] not in range(4):stage['focus_block']=0
  return stage
@@ -131,10 +187,17 @@ def apply_stage_command(state, payload):
  current_ms=int(time.time()*1000)
  def remaining():
   return max(0,int(stage['deadline_ms'])-current_ms) if stage['running'] and stage['deadline_ms'] is not None else max(0,int(stage['remaining_ms']))
- if op=='set_screen':
+ if op=='set_cue':
+  guided_cue(state,str(payload.get('cue','')))
+ elif op=='guided_begin':
+  guided_begin(state)
+ elif op=='guided_finish':
+  guided_finish(state)
+ elif op=='set_screen':
   screen=str(payload.get('screen',''))
   if screen not in PRESENTATION_SCREENS:raise HTTPException(400,'Презентация беті белгісіз')
   stage['screen']=screen
+  stage['cue']='manual'
  elif op=='set_focus':
   g=str(payload.get('group',''))
   b=payload.get('block')
@@ -198,7 +261,7 @@ def prepare_stage_on_change(state, stage_id):
  if not stage['running']:choose_stage(stage,stage_id)
 
 def default():
- return {'staff':[{**p,'captain':p['id']==DEFAULT_CAPTAINS[p['group']]} for p in STAFF], 'joined':[], 'live_stage':default_live_stage(), 'drafts':{},'activity':{},'awards_open':False,'awards_closed':False,'award_votes':{'overall':{},'group':{}}, 'opened':[False]*4,'closed':[False]*4,'phase':'writing','issues':[],'votes':{},'shared':{},'finished':{},'session_closed':False,'reports':[],'audit':[],'revision':0}
+ return {'staff':[{**p,'captain':p['id']==DEFAULT_CAPTAINS[p['group']]} for p in STAFF], 'joined':[], 'live_stage':default_live_stage(), 'issues_locked':False,'vote_locked':False, 'drafts':{},'activity':{},'awards_open':False,'awards_closed':False,'award_votes':{'overall':{},'group':{}}, 'opened':[False]*4,'closed':[False]*4,'phase':'writing','issues':[],'votes':{},'shared':{},'finished':{},'session_closed':False,'reports':[],'audit':[],'revision':0}
 _pg_pool=None
 _pg_lock=threading.Lock()
 def connection():
@@ -238,6 +301,8 @@ def check_action(s,p,action):
  if s['session_closed'] and action not in ['report_save','award_vote']:raise HTTPException(409,'Сессия жабық')
  if action in ('award_vote',):
   if not s.get('awards_open') or s.get('awards_closed'):raise HTTPException(409,'Марапаттау дауысы қазір жабық')
+ if action in ('issue_add','issue_edit') and s.get('issues_locked'):raise HTTPException(409,'Мәселе жазу кезеңі аяқталды')
+ if action=='vote' and s.get('vote_locked'):raise HTTPException(409,'Дауыс беру кезеңі жабылды')
  if action in ('issue_add','issue_edit','vote'):
   block=0
  elif action.startswith(('shared:','finish:','draft:')):
@@ -320,6 +385,9 @@ def mutate(s,p,action,d):
   phase2=d.get('phase');
   if phase2 not in ['writing','voting','final']:raise HTTPException(400,'Қате кезең')
   s['phase']=phase2
+  if phase2=='writing':s['issues_locked']=False
+  if phase2=='voting':s['vote_locked']=False
+  if phase2=='final':s['vote_locked']=True
   prepare_stage_on_change(s,{'writing':'issues','voting':'vote','final':'solutions'}[phase2])
  elif action=='admin_block':
   b=int(d['block']);s['opened'][b]=bool(d['open']);s['closed'][b]=bool(d.get('close',False)) if not d['open'] else False
@@ -411,7 +479,8 @@ def presentation_data(mode:str,request:Request):
   voters={int(uid) for uid in s['votes'] if int(uid) in ids}
   done=sum(bool(s['finished'].get(group+'|'+str(i))) for i in range(4))
   groups.append({'name':group,'total':len(people),'joined':len(ids.intersection(s['joined'])),
-   'online':len(ids.intersection(online)),'issues':len(issue_authors),'voted':len(voters),'done':done})
+   'online':len(ids.intersection(online)),'issues':len(issue_authors),'issue_count':sum(x['group']==group for x in s['issues']),
+   'voted':len(voters),'done':done,'finished_block':{str(i):bool(s['finished'].get(group+'|'+str(i))) for i in range(4)}})
  ready=bool(s['finished'].get(g+'|'+str(b)) or s['closed'][b] or s['session_closed'])
  if b==0 and s['phase']!='final' and not s['closed'][0] and not s['session_closed']:ready=False
  results=[]
@@ -419,7 +488,13 @@ def presentation_data(mode:str,request:Request):
   issues=[dict(x) for x in s['issues'] if x['group']==g]
   for x in issues:x['votes']=sum(x['id'] in vals for vals in s['votes'].values())
   issues.sort(key=lambda x:(-x['votes'],x['id']))
-  for i,x in enumerate(issues[:3]):
+  top_issues=issues[:3]
+  if len(issues)>3 and issues[2]['votes']==issues[3]['votes']:
+   chosen=s['shared'].get(g+'|0|choice_2','')
+   selected=next((x for x in issues if str(x['id'])==str(chosen) and x['votes']==issues[2]['votes']),None)
+   if selected:top_issues=[issues[0],issues[1],selected]
+   else:top_issues=issues[:2] # Avoid an unapproved third place on the projector.
+  for i,x in enumerate(top_issues):
    results.append({'label':'№'+str(i+1)+' · '+str(x['votes'])+' дауыс','text':x['text'],
     'answer':s['shared'].get(g+'|0|solution_'+str(i),'')})
  if ready and b in (2,3):results=[{'label':'Топтың ортақ жауабы','text':s['shared'].get(g+'|'+str(b)+'|answer','')}]
@@ -428,6 +503,19 @@ def presentation_data(mode:str,request:Request):
   vision={'department':[s['shared'].get(g+'|1|department_'+str(i),'') for i in (1,3,5)],
           'company':[s['shared'].get(g+'|1|company_'+str(i),'') for i in (1,3,5)],
           'publisher':s['shared'].get(g+'|1|publisher','') if g.startswith('Әдістеме') else None}
+ vote_top=None;vote_tie_pending=False
+ if s.get('vote_locked') and s['phase']=='final':
+  vote_top=[]
+  for issue in s['issues']:
+   if issue['group']==g:
+    vote_top.append({'text':issue['text'],'votes':sum(issue['id'] in selections for selections in s['votes'].values()),'id':issue['id']})
+  vote_top.sort(key=lambda x:(-x['votes'],x['id']))
+  if len(vote_top)>3 and vote_top[2]['votes']==vote_top[3]['votes']:
+   selected_id=s['shared'].get(g+'|0|choice_2','')
+   selected=next((x for x in vote_top if str(x['id'])==str(selected_id) and x['votes']==vote_top[2]['votes']),None)
+   if selected:vote_top=[vote_top[0],vote_top[1],selected]
+   else:vote_top=vote_top[:2];vote_tie_pending=True
+  else:vote_top=vote_top[:3]
  awards=None
  if s.get('awards_closed'):
   totals={p['id']:0 for p in s['staff']}
@@ -446,6 +534,7 @@ def presentation_data(mode:str,request:Request):
   awards={'top':top,'groups':group_awards}
  return {'stage':stage,'groups':groups,'joined':len(s['joined']),'participants':len(s['staff']),
          'focus_group':g,'focus_block':b,'results_ready':ready,'results':results,'vision':vision,
+         'vote_top':vote_top,'vote_tie_pending':vote_tie_pending,'issue_writing_complete':bool(s.get('issues_locked')),
          'awards':awards,'awards_open':bool(s.get('awards_open')),'awards_closed':bool(s.get('awards_closed')),
          'server_now_ms':int(time.time()*1000)}
 
