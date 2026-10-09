@@ -87,11 +87,13 @@ STAGE_PRESETS = {
  'awards': {'title':'Ең белсенділерге дауыс беру','minutes':5,'block':None,'task':'Жалпы номинацияға басқа топтан, топтыққа өз тобыңыздан кандидат таңдаңыз.'},
 }
 STAGE_KEYS=list(STAGE_PRESETS)
+PRESENTATION_SCREENS=('welcome','agenda','instruction','work','progress','results','vision','awards','closing')
+
 
 def default_live_stage():
  duration=STAGE_PRESETS['issues']['minutes']*60000
  return {'screen':'work','stage_id':'issues','block':0,'presets':{key:val['minutes'] for key,val in STAGE_PRESETS.items()},
-         'duration_ms':duration,'remaining_ms':duration,'deadline_ms':None,'running':False}
+         'duration_ms':duration,'remaining_ms':duration,'deadline_ms':None,'running':False,'focus_group':GROUPS[0],'focus_block':0}
 
 def normalize_live_stage(state):
  stage=state.setdefault('live_stage',default_live_stage())
@@ -107,6 +109,9 @@ def normalize_live_stage(state):
   if not isinstance(stage['presets'].get(key),int) or not 1<=stage['presets'][key]<=240:
    stage['presets'][key]=val
  stage['block']=STAGE_PRESETS[stage['stage_id']]['block']
+ if stage.get('screen') not in PRESENTATION_SCREENS:stage['screen']='work'
+ if stage.get('focus_group') not in GROUPS:stage['focus_group']=GROUPS[0]
+ if not isinstance(stage.get('focus_block'),int) or stage['focus_block'] not in range(4):stage['focus_block']=0
  return stage
 
 def choose_stage(stage, stage_id):
@@ -126,7 +131,17 @@ def apply_stage_command(state, payload):
  current_ms=int(time.time()*1000)
  def remaining():
   return max(0,int(stage['deadline_ms'])-current_ms) if stage['running'] and stage['deadline_ms'] is not None else max(0,int(stage['remaining_ms']))
- if op=='select_stage':
+ if op=='set_screen':
+  screen=str(payload.get('screen',''))
+  if screen not in PRESENTATION_SCREENS:raise HTTPException(400,'Презентация беті белгісіз')
+  stage['screen']=screen
+ elif op=='set_focus':
+  g=str(payload.get('group',''))
+  b=payload.get('block')
+  if g not in GROUPS or isinstance(b,bool) or not isinstance(b,int) or b not in range(4):raise HTTPException(400,'Топ немесе блок дұрыс емес')
+  stage['focus_group']=g
+  stage['focus_block']=b
+ elif op=='select_stage':
   choose_stage(stage,str(payload.get('stage_id','')))
  elif op=='set_presets':
   proposed=payload.get('presets')
@@ -377,6 +392,62 @@ def get_stage_public(mode:str):
  sid=stage['stage_id']
  return {'stage':stage,'title':STAGE_PRESETS[sid]['title'],'task':STAGE_PRESETS[sid]['task'],
          'server_now_ms':int(time.time()*1000),'groups':len(GROUPS),'participants':len(STAFF)}
+
+@app.get('/api/presentation/{mode}')
+def presentation_data(mode:str,request:Request):
+ if mode not in clients:raise HTTPException(400,'mode')
+ require_admin(request)
+ s=load(mode)
+ stage=normalize_live_stage(s)
+ g=stage['focus_group']; b=stage['focus_block']
+ online=set()
+ with presence_lock:
+  online={int(uid) for uid,obj in presence[mode].items() if time.monotonic()-obj['at']<75}
+ members={group:[p for p in s['staff'] if p['group']==group] for group in GROUPS}
+ groups=[]
+ for group,people in members.items():
+  ids={p['id'] for p in people}
+  issue_authors={x['author'] for x in s['issues'] if x['group']==group}
+  voters={int(uid) for uid in s['votes'] if int(uid) in ids}
+  done=sum(bool(s['finished'].get(group+'|'+str(i))) for i in range(4))
+  groups.append({'name':group,'total':len(people),'joined':len(ids.intersection(s['joined'])),
+   'online':len(ids.intersection(online)),'issues':len(issue_authors),'voted':len(voters),'done':done})
+ ready=bool(s['finished'].get(g+'|'+str(b)) or s['closed'][b] or s['session_closed'])
+ if b==0 and s['phase']!='final' and not s['closed'][0] and not s['session_closed']:ready=False
+ results=[]
+ if ready and b==0:
+  issues=[dict(x) for x in s['issues'] if x['group']==g]
+  for x in issues:x['votes']=sum(x['id'] in vals for vals in s['votes'].values())
+  issues.sort(key=lambda x:(-x['votes'],x['id']))
+  for i,x in enumerate(issues[:3]):
+   results.append({'label':'№'+str(i+1)+' · '+str(x['votes'])+' дауыс','text':x['text'],
+    'answer':s['shared'].get(g+'|0|solution_'+str(i),'')})
+ if ready and b in (2,3):results=[{'label':'Топтың ортақ жауабы','text':s['shared'].get(g+'|'+str(b)+'|answer','')}]
+ vision=None
+ if s['finished'].get(g+'|1') or s['closed'][1] or s['session_closed']:
+  vision={'department':[s['shared'].get(g+'|1|department_'+str(i),'') for i in (1,3,5)],
+          'company':[s['shared'].get(g+'|1|company_'+str(i),'') for i in (1,3,5)],
+          'publisher':s['shared'].get(g+'|1|publisher','') if g.startswith('Әдістеме') else None}
+ awards=None
+ if s.get('awards_closed'):
+  totals={p['id']:0 for p in s['staff']}
+  for uid in s.get('award_votes',{}).get('overall',{}).values():
+   if uid in totals:totals[uid]+=1
+  top=sorted((p for p in s['staff'] if totals[p['id']]>0),key=lambda p:(-totals[p['id']],p['name']))[:3]
+  top=[{'name':p['name'],'group':p['group'],'votes':totals[p['id']]} for p in top]
+  group_awards=[]
+  votes=s.get('award_votes',{}).get('group',{})
+  for group,people in members.items():
+   c={p['id']:0 for p in people}
+   for uid in votes.values():
+    if uid in c:c[uid]+=1
+   winners=sorted((p for p in people if c[p['id']]>0),key=lambda p:(-c[p['id']],p['name']))
+   group_awards.append({'group':group,'winner':winners[0]['name'] if winners else None,'votes':c[winners[0]['id']] if winners else 0})
+  awards={'top':top,'groups':group_awards}
+ return {'stage':stage,'groups':groups,'joined':len(s['joined']),'participants':len(s['staff']),
+         'focus_group':g,'focus_block':b,'results_ready':ready,'results':results,'vision':vision,
+         'awards':awards,'awards_open':bool(s.get('awards_open')),'awards_closed':bool(s.get('awards_closed')),
+         'server_now_ms':int(time.time()*1000)}
 
 @app.post('/api/heartbeat')
 def heartbeat(h:Heartbeat,request:Request):
