@@ -78,7 +78,7 @@ class Action(BaseModel):
 
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def default():
- return {'staff':[{**p,'captain':p['id']==DEFAULT_CAPTAINS[p['group']]} for p in STAFF], 'joined':[], 'drafts':{},'activity':{}, 'opened':[False]*4,'closed':[False]*4,'phase':'writing','issues':[],'votes':{},'shared':{},'finished':{},'session_closed':False,'reports':[],'audit':[],'revision':0}
+ return {'staff':[{**p,'captain':p['id']==DEFAULT_CAPTAINS[p['group']]} for p in STAFF], 'joined':[], 'drafts':{},'activity':{},'awards_open':False,'awards_closed':False,'award_votes':{'overall':{},'group':{}}, 'opened':[False]*4,'closed':[False]*4,'phase':'writing','issues':[],'votes':{},'shared':{},'finished':{},'session_closed':False,'reports':[],'audit':[],'revision':0}
 _pg_pool=None
 _pg_lock=threading.Lock()
 def connection():
@@ -115,7 +115,9 @@ def role(s,actor):
 
 def check_action(s,p,action):
  if action.startswith('admin_'): return # Authentication is enforced by the API route
- if s['session_closed'] and action not in ['report_save']:raise HTTPException(409,'Сессия жабық')
+ if s['session_closed'] and action not in ['report_save','award_vote']:raise HTTPException(409,'Сессия жабық')
+ if action in ('award_vote',):
+  if not s.get('awards_open') or s.get('awards_closed'):raise HTTPException(409,'Марапаттау дауысы қазір жабық')
  if action in ('issue_add','issue_edit','vote'):
   block=0
  elif action.startswith(('shared:','finish:','draft:')):
@@ -147,9 +149,18 @@ def mutate(s,p,action,d):
   ids=d.get('ids',[])
   if len(ids)!=3 or len(set(ids))!=3 or any(not any(x['id']==i and x['group']==group for x in s['issues']) for i in ids):raise HTTPException(400,'Өз тобыңыздың дәл 3 түрлі мәселесін таңдаңыз')
   s['votes'][str(uid)]=ids
+ elif action=='award_vote':
+  category=str(d.get('category',''));target_id=int(d.get('target',0))
+  if category not in ('overall','group'):raise HTTPException(400,'Номинация қате')
+  target=role(s,target_id)
+  if target_id==uid:raise HTTPException(400,'Өзіңізге дауыс бере алмайсыз')
+  if category=='group' and target['group']!=group:raise HTTPException(400,'Тек өз тобыңызға дауыс беріңіз')
+  if category=='overall' and target['group']==group:raise HTTPException(400,'Басқа топтың қатысушысын таңдаңыз')
+  s.setdefault('award_votes',{'overall':{},'group':{}}).setdefault(category,{})[str(uid)]=target_id
  elif action.startswith('draft:'):
   b=int(action.split(':')[1]);key=str(d.get('key',''))
   allowed={1:['department_1','department_3','department_5','company_1','company_3','company_5','publisher'],2:['answer'],3:['answer']}
+  if p.get('captain'):raise HTTPException(403,'Капитан қаралама жазбайды')
   if b not in allowed or key not in allowed[b]:raise HTTPException(400,'Қате қаралама өрісі')
   if key=='publisher' and p['dept']!='Әдістеме':raise HTTPException(403,'Өріс тек Әдістеме үшін')
   if s['closed'][b] or s['finished'].get(group+'|'+str(b)):raise HTTPException(409,'Блок бекітілген')
@@ -172,6 +183,12 @@ def mutate(s,p,action,d):
   if s['closed'][b]:raise HTTPException(409,'Блок жабық')
   if b==0 and s['phase']!='final':raise HTTPException(409,'Қорытынды кезеңі ашылмаған')
   s['finished'][group+'|'+str(b)]=True
+ elif action=='admin_awards':
+  op=d.get('operation')
+  if op=='open':s['awards_open']=True;s['awards_closed']=False
+  elif op=='close':s['awards_open']=False;s['awards_closed']=True
+  elif op=='reopen':s['awards_open']=True;s['awards_closed']=False
+  else:raise HTTPException(400,'Қате мәртебе')
  elif action=='admin_rename':
   target=role(s,int(d.get('id',0)));name=' '.join(str(d.get('name','')).split())
   if not 3<=len(name)<=140:raise HTTPException(400,'Аты-жөні 3–140 таңба болуы тиіс')
@@ -227,10 +244,15 @@ def get_state(mode:str, request:Request, actor:int=0, admin:bool=False):
   s['reports']=[];s['audit']=[]
   s['drafts']={k:v for k,v in s.get('drafts',{}).items() if k.startswith(str(actor)+'|') or (p.get('captain') and any(k.startswith(str(member['id'])+'|') for member in s['staff'] if member['group']==g))}
   s['activity']={}
+  votes=s.get('award_votes',{'overall':{},'group':{}})
+  s['award_votes']={category:({str(actor):votes.get(category,{}).get(str(actor))} if not s.get('awards_closed') else {}) for category in ('overall','group')}
+  if not s.get('awards_closed'):s.pop('award_results',None)
  if admin:
   with presence_lock:
    s['online_ids']=[int(i) for i,t in presence[mode].items() if time.monotonic()-t['at']<75]
    s['active_views']={str(i):v['view'] for i,v in presence[mode].items() if time.monotonic()-v['at']<75}
+ if admin and s.get('awards_closed'):
+  s['award_results']={category:{str(p['id']):sum(1 for target in s.get('award_votes',{}).get(category,{}).values() if target==p['id']) for p in s['staff']} for category in ('overall','group')}
  return s
 
 class Heartbeat(BaseModel):
