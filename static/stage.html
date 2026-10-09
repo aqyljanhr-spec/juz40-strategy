@@ -1,0 +1,26 @@
+<!doctype html><html lang="kk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#153723"><title>P&I · Live Stage</title><link rel="icon" href="/favicon.svg"><style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,Arial,sans-serif;color:#fff;background:#0e2b1c}*{box-sizing:border-box}body{margin:0;min-height:100svh;background:radial-gradient(circle at 75% 20%,#265f3b 0,transparent 44%),linear-gradient(138deg,#163d29 0%,#0f281c 86%)}
+.stage{min-height:100svh;max-width:1480px;margin:auto;padding:clamp(25px,5vw,85px);display:flex;flex-direction:column;justify-content:space-between;gap:38px}
+header,footer{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.brand{font-weight:900;letter-spacing:-.4px;font-size:clamp(16px,1.8vw,24px)}.brand em{font-style:normal;color:#8bddaa}.pill{font-size:clamp(11px,1.2vw,16px);color:#b7e6c5;padding:10px 15px;border:1px solid #5c9270;border-radius:999px}
+main{display:flex;flex-direction:column;align-items:center;text-align:center;gap:20px}.eyebrow{font-size:clamp(12px,1.3vw,18px);text-transform:uppercase;letter-spacing:.2em;color:#a8d9b5;font-weight:700}
+h1{font-size:clamp(35px,5.7vw,86px);line-height:1.1;max-width:1100px;margin:0;letter-spacing:-.04em}
+.description{font-size:clamp(16px,1.9vw,27px);max-width:970px;line-height:1.5;color:#d7eadd;margin:0}
+.clock{font-variant-numeric:tabular-nums;font-size:clamp(90px,17vw,260px);line-height:1;letter-spacing:-.07em;font-weight:800;margin:clamp(12px,4vh,55px) 0 0}
+.progress{width:min(960px,90%);height:9px;border-radius:99px;overflow:hidden;background:#41644a}.progress>div{height:100%;background:#a6f0b8;width:100%;transition:width .4s linear}
+.status{color:#c4e4ce;font-weight:700;font-size:clamp(14px,1.4vw,20px)}footer{border-top:1px solid #508063;padding-top:25px;color:#c5e2cb;font-size:clamp(13px,1.4vw,18px)}
+.urgent .clock{color:#ffe2a4}.expired .clock{color:#ffb6a3}button{border:1px solid #83b991;background:#214e34;color:#fff;padding:10px 16px;font:inherit;border-radius:9px;cursor:pointer}
+@media(prefers-reduced-motion:reduce){.progress>div{transition:none}}
+</style></head><body><div class="stage" id="stage"><header><div class="brand">P&I <em>STRATEGY</em></div><span class="pill" id="mode">LIVE STAGE</span></header>
+<main><span class="eyebrow" id="group">СТРАТЕГИЯЛЫҚ СЕССИЯ</span><h1 id="title">Жүктелуде…</h1><p class="description" id="description">Тапсырма мен уақыт көрсетіледі</p><div class="clock" id="clock">--:--</div><div class="progress"><div id="progress"></div></div><span class="status" id="status">Қосылуда…</span></main>
+<footer><div id="members">7 топ · 76 қатысушы</div><button id="fullscreen">⛶ Толық экран</button></footer></div>
+<script>
+const mode=new URLSearchParams(location.search).get('mode')==='live'?'live':'test';document.getElementById('mode').textContent=mode.toUpperCase()+' · LIVE STAGE';
+let state=null,offset=0,reading=false;const $=id=>document.getElementById(id);
+function remaining(){return !state?0:state.running?Math.max(0,(state.deadline_ms||0)-(Date.now()+offset)):Math.max(0,state.remaining_ms||0)}
+function fmt(ms){let s=Math.ceil(ms/1000);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function tick(){if(!state)return;let r=remaining();$('clock').textContent=fmt(r);$('progress').style.width=Math.max(0,Math.min(100,100*r/Math.max(1,state.duration_ms)))+'%';$('stage').classList.toggle('urgent',r<=60000&&state.running);$('stage').classList.toggle('expired',r===0);$('status').textContent=state.running?(r>0?'Таймер жүріп жатыр':'Уақыт аяқталды'):(r<state.duration_ms?'Пауза':'Басталуын күтуде')}
+async function load(){if(reading)return;reading=true;try{const response=await fetch('/api/stage/'+mode,{cache:'no-store'});if(!response.ok)throw Error('Дерек жүктелмеді');const data=await response.json();state=data.stage;offset=data.server_now_ms-Date.now();$('title').textContent=data.title;$('description').textContent=data.task;$('group').textContent=state.stage_id==='awards'?'МАРАПАТТАУ КЕЗЕҢІ':'P&I · WORK SESSION';$('members').textContent=data.groups+' топ · '+data.participants+' қатысушы';tick()}catch(e){$('status').textContent='Байланыс жоқ · қайта қосылу күтілуде'}finally{reading=false}}
+load();setInterval(tick,250);setInterval(load,12000);
+let socket;function wsConnect(){try{socket=new WebSocket((location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+'/api/live/'+mode);socket.onmessage=()=>load();socket.onclose=()=>setTimeout(wsConnect,5000)}catch(e){}}wsConnect();
+$('fullscreen').onclick=()=>document.documentElement.requestFullscreen?.();
+</script></body></html>

@@ -236,3 +236,49 @@ textarea::placeholder,input::placeholder{color:#a6b3aa}
 .mobile-swipe-hint{display:none;font-size:9px;color:#9daea2;letter-spacing:0;text-transform:none;font-weight:650}
 @media(max-width:1100px){.dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.dashboard-kpis .mini{padding:12px}.metric-label{font-size:10px}.metric-meta{font-size:9px}.metric-denom{font-size:12px}.group-progress-grid{grid-template-columns:1fr;margin-bottom:25px}.dashboard-filters{gap:8px}.dashboard-filters select{font-size:12px}.mobile-swipe-hint{display:inline}#monitorRows .monitor-list{max-height:520px}}
+
+/* Live Stage — stage presets */
+.stage-presets-title{font-size:15px;margin:20px 0 8px}
+.stage-presets{display:grid;grid-template-columns:1fr;gap:5px}
+.stage-preset-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #e3ede5;background:#fff;border-radius:11px;margin:0;font-size:12px}
+.stage-preset-row>span:first-child{min-width:0;display:grid;gap:2px}
+.stage-preset-row b{color:#244330;font-size:12px;font-weight:740}
+.stage-preset-row small{font-size:10px;color:#819486}
+.stage-preset-input{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.stage-preset-input input{width:69px;min-width:69px;min-height:37px;padding:7px 8px;text-align:center;border-radius:8px;font-size:13px;font-weight:750}
+.stage-presets-save{margin-top:12px}
+@media(max-width:760px){.stage-preset-row{padding:10px 8px}.stage-preset-row b{font-size:11px}}
+/* Live Stage - synchronized clock across Super Admin, participants and projector */
+.shared-timer-bar{position:sticky;top:76px;z-index:19;background:#173e29;color:#fff;border-bottom:1px solid #346e48;box-shadow:0 5px 14px rgba(9,39,21,.12)}
+.shared-timer-inner{max-width:1360px;margin:auto;min-height:53px;padding:8px 28px;display:flex;align-items:center;gap:13px}
+.shared-timer-dot{height:8px;width:8px;border-radius:50%;background:#9cedb2;flex:0 0 8px}
+.shared-stage-block{font-size:12px;font-weight:750;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shared-stage-status{font-size:11px;color:#c9e7d0;white-space:nowrap}
+.shared-stage-clock{font-size:23px;line-height:1;letter-spacing:-.8px;font-variant-numeric:tabular-nums;font-weight:850;white-space:nowrap}
+.stage-urgent{background:#6e4025;border-color:#a57742}.stage-urgent .shared-stage-clock{color:#ffe5a0}
+.stage-paused .shared-timer-dot{background:#a9b8ad}
+.stage-control-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.95fr);gap:18px;margin-top:18px}
+.stage-console,.stage-live-preview{border:1px solid #e0ebe3;border-radius:16px;padding:20px;min-width:0;background:#fcfdfc}
+.stage-section-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.stage-section-heading .muted{font-size:11px}
+.stage-console>label{font-size:12px;margin:16px 0 7px}
+.stage-console select{background:#fff;max-width:100%;min-height:45px}
+.stage-clock-box{margin:20px 0;border-radius:16px;background:#143c26;color:#fff;text-align:center;padding:19px 16px 16px;box-shadow:0 8px 23px rgba(30,70,40,.08)}
+.stage-clock-label{text-transform:uppercase;letter-spacing:.13em;font-size:10px;color:#c8e2cf;font-weight:750}
+.stage-console-time{font-size:clamp(58px,7vw,98px);font-weight:850;letter-spacing:-.07em;line-height:1.22;font-variant-numeric:tabular-nums}
+.stage-progress-track{height:7px;background:#41694c;border-radius:90px;overflow:hidden;margin:8px 3px 10px}
+.stage-progress-fill{height:100%;background:#a1eab1;border-radius:inherit;transition:width .25s linear}
+.stage-clock-box small{color:#c9e7d0;font-size:11px}
+.stage-control-buttons{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}.stage-control-buttons button{flex:1;min-width:110px;padding:10px 12px}
+.stage-control-buttons.add-time button{min-width:100px}.stage-disclaimer{font-size:11px;line-height:1.5;margin:8px 0 17px}
+.stage-preview-label{font-size:10px;letter-spacing:.1em;font-weight:800;color:#68816d}
+.stage-preview-green{margin-top:11px;min-height:255px;background:linear-gradient(125deg,#123822,#24603b);color:white;border-radius:15px;padding:24px;display:flex;flex-direction:column;align-items:flex-start;gap:10px;overflow:hidden}
+.stage-preview-green>span:first-child{font-size:10px;font-weight:800;letter-spacing:.17em;color:#a7dcb7}
+.stage-preview-green>strong{font-size:clamp(18px,2.3vw,28px);line-height:1.15;letter-spacing:-.04em}
+.stage-preview-green small{font-size:12px;color:#d7eada}
+.stage-preview-time{font-size:clamp(47px,7vw,73px);font-weight:850;letter-spacing:-.07em;font-variant-numeric:tabular-nums;margin-top:auto;line-height:1}
+.stage-preview-footer{margin-top:2px;font-size:11px;color:#c5e1ce}
+@media(max-width:980px){.stage-control-layout{grid-template-columns:1fr}.stage-console,.stage-live-preview{padding:16px}}
+@media(max-width:760px){.shared-timer-bar{top:60px}.shared-timer-inner{min-height:46px;padding:6px 12px;gap:9px}.shared-stage-block{font-size:11px}.shared-stage-status{font-size:10px}.shared-stage-clock{font-size:20px}.stage-control-layout{margin-top:10px;gap:12px}.stage-console-time{font-size:65px}.stage-clock-label{font-size:9px}.stage-preview-green{min-height:190px}}
+@media(max-width:400px){.shared-stage-status{display:none}.shared-stage-clock{font-size:21px}.stage-control-buttons button{min-width:88px}.stage-preview-green{padding:18px}}
+@media(prefers-reduced-motion:reduce){.stage-progress-fill{transition:none}}
