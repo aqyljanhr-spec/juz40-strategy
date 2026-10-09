@@ -289,3 +289,8 @@ textarea::placeholder,input::placeholder{color:#a6b3aa}
 .present-stage-panel select{background:#fff}
 .present-stage-panel .stage-control-buttons{margin:2px 0 0}
 .present-stage-panel .stage-disclaimer{margin:0 0 4px}
+
+/* Presentation page preview must not leak the previous task's countdown. */
+.stage-preview-cover{font-size:clamp(16px,2.2vw,25px);font-weight:700;color:#d9f2df;line-height:1.35;margin-top:auto;max-width:100%;overflow-wrap:anywhere}
+#stagePreviewBox .stage-preview-time{margin-top:auto}
+#stagePreviewBox>small{max-width:100%;overflow-wrap:anywhere}

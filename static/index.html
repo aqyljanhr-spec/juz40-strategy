@@ -182,6 +182,27 @@ const STAGE_SCREENS=[
  {id:'awards',title:'08 · Марапаттау'},
  {id:'closing',title:'09 · Қорытынды'}
 ];
+function stagePreviewBody(st){
+ const screen=st.screen||'work',entry=selectedStage(st),focus=esc(st.focus_group||'Топ таңдалмаған');
+ const head=(title,detail,meta='P&I / LIVE STAGE')=>`<span>${meta}</span><strong>${title}</strong><small>${detail}</small>`;
+ switch(screen){
+  case 'welcome':return head('P&I STRATEGY SESSION','Әдістеме · Сапа · IT','JUZ40 · PRODUCT & IT')+'<div class="stage-preview-cover">76 қатысушы · 7 топ · 4 блок</div>';
+  case 'agenda':return head('Сессия бағдарламасы','4 стратегиялық блок · 7 топ')+'<div class="stage-preview-cover">Қазіргі жағдай → Vision → Өзгерістер → ҰБТ</div>';
+  case 'instruction':return head(esc(entry.title),'Қатысушыларға тапсырма нұсқаулығы','КЕЗЕҢ НҰСҚАУЛЫҒЫ')+'<div class="stage-preview-cover">Тапсырманы орындау тәртібі</div>';
+  case 'work':return head(esc(entry.title),esc(entry.group),'ҚАЗІРГІ КЕЗЕҢ · WORK')+`<div id="stagePreviewTime" class="stage-preview-time">${formatStageTime(stageTimeLeft(st))}</div>`;
+  case 'progress':return head('7 топтың прогресі','Ағымдағы орындалу статистикасы')+'<div class="stage-preview-cover">7 команда · LIVE PROGRESS</div>';
+  case 'results':return head('Топтың нәтижелері',focus)+'<div class="stage-preview-cover">Бекітілген стратегиялық жауаптар</div>';
+  case 'vision':return head('Vision 2027–2029–2031',focus)+'<div class="stage-preview-cover">Бөлімнің · компанияның · Баспаның болашағы</div>';
+  case 'awards':return head('Ең белсенді қатысушылар','Жалпы ТОП-3 марапаттау')+'<div class="stage-preview-cover">🥈 2 · 🥇 1 · 🥉 3</div>';
+  case 'closing':return head('Рақмет!','Стратегиялық сессия қорытындысы')+'<div class="stage-preview-cover">P&I STRATEGY SESSION</div>';
+  default:return head('P&I Strategy','Презентацияны таңдаңыз');
+ }
+}
+function stagePreviewSync(screen){
+ const label=$('stagePreviewScreen'),box=$('stagePreviewBox');
+ if(label)label.textContent=STAGE_SCREENS.find(x=>x.id===screen)?.title||'Презентация';
+ if(box)box.innerHTML=stagePreviewBody({...S.live_stage,screen});
+}
 function liveStagePage(){
  let st=S.live_stage||{stage_id:'issues',presets:{issues:10},duration_ms:600000,remaining_ms:600000,running:false};
  let current=selectedStage(st),status=stageStatus(st);
@@ -192,7 +213,7 @@ function liveStagePage(){
   <div class="present-stage-panel"><label for="stageScreenSelect">Проектордағы презентация беті</label>
     <select id="stageScreenSelect">${STAGE_SCREENS.map(item=>`<option value="${item.id}" ${st.screen===item.id?'selected':''}>${esc(item.title)}</option>`).join('')}</select>
     <div class="stage-control-buttons"><button id="stagePrevSlide">← Алдыңғы бет</button><button id="stageNextSlide" class="primary">Келесі бет →</button></div>
-    <p class="muted stage-disclaimer">Экран өзгергенде проектор автоматты жаңарады. Қатысушылардың жұмыс беті ауыспайды.</p>
+    <p class="muted stage-disclaimer">Презентация беті тек проекторды өзгертеді. Төмендегі «Сессия кезеңі» — қатысушыларға ортақ таймердің бөлек баптауы.</p>
     <label for="stageFocusGroup">Нәтижелер көрсетілетін топ</label>
     <select id="stageFocusGroup">${GROUPS().map(g=>`<option value="${esc(g)}" ${st.focus_group===g?'selected':''}>${esc(g)}</option>`).join('')}</select>
     <label for="stageFocusBlock">Нәтижелер көрсетілетін блок</label>
@@ -207,7 +228,7 @@ function liveStagePage(){
   <p class="muted stage-disclaimer">Таймер аяқталғанда ешбір блок автоматты жабылмайды.</p>
   <div class="stage-control-buttons"><button class="primary" id="stageProjector">↗ Проекторға шығару</button></div>
  </div>
- <div class="stage-live-preview"><span class="stage-preview-label">ПРОЕКТОР ЭКРАНЫ · <span id="stagePreviewScreen">${esc(STAGE_SCREENS.find(x=>x.id===(st.screen||'work'))?.title||'Жұмыс / таймер')}</span></span><div class="stage-preview-green"><span>P&I / LIVE STAGE</span><strong>${esc(STAGE_SCREENS.find(x=>x.id===(st.screen||'work'))?.title||'04 · Жұмыс және таймер')}</strong><small>${name} · ${esc(current.group)}</small><div id="stagePreviewTime" class="stage-preview-time">${formatStageTime(stageTimeLeft(st))}</div><span class="stage-preview-footer">7 топ · ${S.staff.length} қатысушы</span></div>
+ <div class="stage-live-preview"><span class="stage-preview-label">ПРОЕКТОР ЭКРАНЫ · <span id="stagePreviewScreen">${esc(STAGE_SCREENS.find(x=>x.id===(st.screen||'work'))?.title||'Жұмыс / таймер')}</span></span><div class="stage-preview-green" id="stagePreviewBox">${stagePreviewBody(st)}</div><p class="muted stage-disclaimer">Бұл — таңдалған слайдтың ықшам үлгісі. Проектордағы толық презентация бөлек терезеде ашылады.</p>
   <h3 class="stage-presets-title">Кезеңдердің уақыт жоспары</h3>
   <p class="muted stage-disclaimer">Уақыттарды өзгертіп, «Жоспарды сақтау» басыңыз. Жүріп жатқан таймер тоқтамайды.</p>
   <div class="stage-presets">${STAGE_PLAN.map(item=>`<label class="stage-preset-row"><span><b>${esc(item.title)}</b><small>${esc(item.group)}</small></span><span class="stage-preset-input"><input type="number" inputmode="numeric" min="1" max="240" step="1" value="${Number(st.presets?.[item.id]||10)}" data-stage-preset="${item.id}" aria-label="${esc(item.title)} ұзақтығы"><small>мин</small></span></label>`).join('')}</div>
@@ -217,8 +238,8 @@ function liveStagePage(){
 function bindLiveStage(){
  if(!ADMIN||VIEW!=='livestage')return;
  const send=(operation,data={})=>act('admin_live_stage',{operation,...data});
- let screenSelect=$('stageScreenSelect');if(screenSelect)screenSelect.onchange=()=>send('set_screen',{screen:screenSelect.value});
- const moveSlide=step=>{let cur=STAGE_SCREENS.findIndex(x=>x.id===(S.live_stage?.screen||'work'));let next=STAGE_SCREENS[Math.max(0,Math.min(STAGE_SCREENS.length-1,cur+step))];if(next)send('set_screen',{screen:next.id})};
+ let screenSelect=$('stageScreenSelect');if(screenSelect)screenSelect.onchange=async()=>{const next=screenSelect.value,previous=S.live_stage?.screen||'work';stagePreviewSync(next);const ok=await send('set_screen',{screen:next});if(!ok)stagePreviewSync(previous)};
+ const moveSlide=async step=>{let cur=STAGE_SCREENS.findIndex(x=>x.id===(S.live_stage?.screen||'work'));let next=STAGE_SCREENS[Math.max(0,Math.min(STAGE_SCREENS.length-1,cur+step))];if(next){stagePreviewSync(next.id);let ok=await send('set_screen',{screen:next.id});if(!ok)stagePreviewSync(S.live_stage?.screen||'work')}};
  let slidePrev=$('stagePrevSlide');if(slidePrev)slidePrev.onclick=()=>moveSlide(-1);
  let slideNext=$('stageNextSlide');if(slideNext)slideNext.onclick=()=>moveSlide(1);
  const focus=()=>send('set_focus',{group:$('stageFocusGroup').value,block:Number($('stageFocusBlock').value)});

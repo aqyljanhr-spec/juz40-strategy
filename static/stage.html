@@ -25,6 +25,8 @@ header,.footer{display:flex;align-items:center;justify-content:space-between;gap
 @media(max-width:1020px){.agenda{grid-template-columns:repeat(2,minmax(0,1fr))}.groups-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.agenda .slidecard{min-height:150px}}
 @media(max-width:650px){.shell{padding:21px 17px;gap:18px}.slide{justify-content:center}.display{font-size:clamp(34px,8vw,53px)}.stat{min-width:115px;padding:12px 15px}.cardgrid,.instruction-list{grid-template-columns:1fr}.instruction-list .slidecard{min-height:unset}.agenda .slidecard{min-height:135px}.result-grid,.result-grid.vision{grid-template-columns:1fr;max-height:65svh;overflow:auto}.groups-grid{max-height:65svh;overflow:auto}.group-card{min-height:125px}.podium{height:280px}.winner strong{font-size:12px}.winner .vote-num{font-size:11px}.footer{gap:8px}.chapter{display:none}}
 @media(prefers-reduced-motion:reduce){.winner{opacity:1;animation:none}.confetti{display:none}.bar>div{transition:none}}
+/* The shared countdown belongs to the Work slide only. Other slides remain uncluttered. */
+.shell:not([data-screen="work"]) #footerClock{display:none}
 </style></head><body>
 <div class="shell" id="shell"><header><div class="brand">P<span>&</span>I <span>STRATEGY</span></div><span class="chapter" id="chapter">STRATEGY SESSION · LIVE STAGE</span><span class="mode" id="modeLabel">ЖҮКТЕЛУДЕ…</span></header>
 <main class="slide" id="slide" aria-live="polite"><p class="eyebrow">P&I STRATEGY SESSION</p><h1 class="display">Презентация жүктелуде…</h1></main>
